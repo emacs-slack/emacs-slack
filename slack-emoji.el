@@ -118,12 +118,10 @@ This runs asynchronously, splitting the emojis in batches of `slack-emoji-job-ba
                                                          (list (cons "name" (substring (symbol-name name) 1))
                                                                (cons "image" path)
                                                                (cons "style" "github")))))
-                                       (if (file-exists-p path)
-                                           (funcall ',(lambda (emoji) (push-new-emoji emoji)) emoji)
-                                         (slack-url-copy-file
-                                          url
-                                          path
-                                          ,team))
+                                       (if (not (file-exists-p path))
+                                           (slack-url-copy-file url path ,team))
+                                       
+                                       (funcall ',(lambda (emoji) (push-new-emoji emoji)) emoji)
                                        (add-to-list 'slack-emoji-paths path)))))
                     it)
                    (append
