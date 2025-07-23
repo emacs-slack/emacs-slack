@@ -129,7 +129,7 @@
                 (title (slack-file-title file)))
             (concat
              (when (string= (oref file mode) "snippet")
-               (propertize (format "```\n%s\n```\n"(oref file preview)) 'face 'slack-preview-face))
+               (propertize (format "```%s\n%s\n```\n" (downcase type) (oref file preview)) 'face 'slack-preview-face))
              (format "uploaded this %s: %s <%s|open in browser>"
                      type
                      (slack-file-link-info (oref file id)
