@@ -81,6 +81,21 @@
    (no-retry :initarg :no-retry :initform nil :type boolean)
    (without-auth :initarg :without-auth :initform nil :type boolean)))
 
+(defun slack-request--response-object (response)
+  "Return RESPONSE or its inner `request-response' object."
+  (cond
+   ((and (fboundp 'request-response-p)
+         (request-response-p response))
+    response)
+   ((and (ignore-errors (object-of-class-p response 'slack-request-request))
+         (slot-boundp response 'response))
+    (let ((inner (oref response response)))
+      (when (and inner
+                 (fboundp 'request-response-p)
+                 (request-response-p inner))
+        inner)))
+   (t response)))
+
 (cl-defun slack-request-create
     (url team &key type success error params data parser sync files headers (timeout slack-request-timeout) without-auth no-retry)
   (let ((args (list
@@ -179,23 +194,25 @@
                (funcall on-success))))
          (-on-error (&key error-thrown symbol-status response data)
            (unwind-protect
-               (progn
-                 (slack-if-let* ((retry-after (request-response-header response "retry-after"))
-                                 (retry-after-sec (string-to-number retry-after)))
+               (let ((response (slack-request--response-object response)))
+                 (if-let* ((retry-after (and response
+                                             (request-response-header response "retry-after")))
+                           (retry-after-sec (string-to-number retry-after)))
                      (progn
                        (slack-request-retry-request req retry-after-sec)
                        (slack-request-log-retry req retry-after-sec))
-                   (slack-request-log-failed req error-thrown symbol-status data)
-                   (if (slack-request-retry-failed-request-p req error-thrown symbol-status)
-                       (progn
-                         (slack-request-log-failed-retry req error-thrown symbol-status data)
-                         (slack-request-retry-request req 1))
-                     (when (functionp (oref req error))
-                       (funcall (oref req error)
-                                :error-thrown error-thrown
-                                :symbol-status symbol-status
-                                :response response
-                                :data data)))))
+                   (progn
+                     (slack-request-log-failed req error-thrown symbol-status data)
+                     (if (slack-request-retry-failed-request-p req error-thrown symbol-status)
+                         (progn
+                           (slack-request-log-failed-retry req error-thrown symbol-status data)
+                           (slack-request-retry-request req 1))
+                       (when (functionp (oref req error))
+                         (funcall (oref req error)
+                                  :error-thrown error-thrown
+                                  :symbol-status symbol-status
+                                  :response response
+                                  :data data))))))
              (when (functionp on-error)
                (funcall on-error)))))
       (with-slots (url type params data parser sync files headers timeout without-auth) req
@@ -361,9 +378,10 @@
           (push req new-queue)))
 
       (dolist (req to-remove)
-        (when (and (oref req response)
-                   (not (request-response-done-p (oref req response))))
-          (request-abort (oref req response))))
+        (let ((response (slack-request--response-object (oref req response))))
+          (when (and response
+                     (not (request-response-done-p response)))
+            (request-abort response))))
 
       (oset slack-request-worker-instance queue new-queue)
       (slack-log (format "Remove Request from Worker, ALL: %s, REMOVED: %s, NEW-QUEUE: %s"
