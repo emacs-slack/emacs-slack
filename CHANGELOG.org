@@ -62,6 +62,12 @@ All notable changes to this project will be documented in this file.
   payload alone cannot tell whether a message was saved.
 - The stars buffer binds =g= to ~slack-stars-refresh-buffer~ in addition
   to =G=.
+- ~slack-emoji-dwim~ runs the emoji command the cursor asks for: on a
+  message it adds the selected emoji as a reaction
+  (~slack-message-add-reaction~), while typing it inserts it at point
+  (~slack-insert-emoji~), in the input area as well as in a compose or
+  edit buffer.  One key can take the place of the two commands, which
+  stay available on their own.
 
 ** Changed
 

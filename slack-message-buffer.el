@@ -42,6 +42,7 @@
 (require 'slack-modeline)
 (require 'slack-message-notification)
 (require 'slack-channel)
+(require 'slack-emoji)
 (require 'slack-defcustoms)
 
 (defvar slack-completing-read-function)
@@ -1137,6 +1138,19 @@ Provide SUCCESS-CALLBACK to run some action after displaying."
   (slack-if-let* ((buf slack-current-buffer))
       (slack-buffer-remove-reaction-from-message buf
                                                  (slack-get-ts))))
+
+(defun slack-emoji-dwim ()
+  "Select an emoji and use it the way the cursor suggests.
+While typing, in the input area or in a compose or edit buffer, the
+emoji is inserted at point, as `slack-insert-emoji' does.  On a message
+it is sent as a reaction to that message, as `slack-message-add-reaction'
+does.  The input area wins over the message under it, so typed text that
+inherited a message timestamp still inserts."
+  (interactive)
+  (cond ((slack-buffer-in-input-area-p) (slack-insert-emoji))
+        ((slack-get-ts) (slack-message-add-reaction))
+        ((derived-mode-p 'lui-mode) (user-error "No Slack message at point"))
+        (t (slack-insert-emoji))))
 
 (defun slack-message-display-room ()
   (interactive)

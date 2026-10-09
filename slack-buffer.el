@@ -564,6 +564,14 @@ placeholder so the buffer does not wait forever."
                          (mapcar #'window-buffer (window-list)))
                  :test #'string=)))
 
+(defun slack-buffer-in-input-area-p ()
+  "Return non-nil when point is in the input area, below the prompt.
+Buffers not built on lui, the compose and edit buffers, have no input
+marker and answer nil."
+  (and (markerp lui-input-marker)
+       (marker-position lui-input-marker)
+       (<= (marker-position lui-input-marker) (point))))
+
 (defmacro slack-buffer-goto-char (find-point &rest else)
   (let ((ts (car else))
         (else (cdr else)))

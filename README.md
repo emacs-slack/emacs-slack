@@ -173,6 +173,9 @@ Some terminology in the `slack-` functions:
   - use to mention to user
 - `slack-message-embed-channel`
   - use to mention to channel
+- `slack-emoji-dwim`
+  - select an emoji and use it where the cursor is: as a reaction to the
+    message at point, or inserted in the text you are typing
 - `slack-file-upload`
   - attach a file to the current message draft; it uploads when you send
 - thread sync suggestion: when a thread exceeds

@@ -1,4 +1,4 @@
-;;; slack-emoji-test.el --- tests for the emoji sync and shortcode rule -*- lexical-binding: t; -*-
+;;; slack-emoji-test.el --- tests for the emoji commands and shortcode rule -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 
@@ -8,10 +8,16 @@
 ;; including the one inside the timestamp 17:00:00.  The Slack app only
 ;; substitutes shortcodes that stand on their own;
 ;; `slack-emoji-shortcode-standalone-p' reproduces that rule.
+;;
+;; `slack-emoji-dwim' picks between reacting and inserting from where the
+;; cursor is; the emoji picker itself is never involved, so the tests stub
+;; both commands and only check which one runs.
 
 ;;; Code:
 (require 'ert)
+(require 'cl-lib)
 (require 'slack-emoji)
+(require 'slack-message-buffer)
 
 (defun slack-emoji-test--00-range (text start)
   "Return (START . END) buffer positions of a \":00:\" in TEXT.
@@ -69,6 +75,67 @@ START is the 0-based index to search from; the returned positions are
     (insert "thumbs up")
     (should (slack-emoji-shortcode-standalone-p
              nil "👍" (current-buffer) 1 4))))
+
+;;; `slack-emoji-dwim'
+
+(defconst slack-emoji-test--ts "1657626419.612969"
+  "Timestamp of the message the dwim tests work on.")
+
+(defun slack-emoji-test--dwim-branch ()
+  "Run `slack-emoji-dwim' with both commands stubbed.
+Return `reaction' or `insert', whichever the command picked."
+  (let ((branch nil))
+    (cl-letf (((symbol-function 'slack-message-add-reaction)
+               (lambda () (setq branch 'reaction)))
+              ((symbol-function 'slack-insert-emoji)
+               (lambda () (setq branch 'insert))))
+      (slack-emoji-dwim))
+    branch))
+
+(defmacro slack-emoji-test--with-message-buffer (&rest body)
+  "Run BODY in a lui buffer holding one message above the input area."
+  (declare (indent 0) (debug t))
+  `(with-temp-buffer
+     (lui-mode)
+     (lui-set-prompt "test> ")
+     (let ((lui-time-stamp-position nil))
+       (lui-insert (propertize "an interesting message\n"
+                               'ts slack-emoji-test--ts)
+                   t))
+     ,@body))
+
+(ert-deftest slack-emoji-test/dwim-reacts-on-a-message ()
+  "On a message the emoji is sent as a reaction."
+  (slack-emoji-test--with-message-buffer
+    (goto-char (point-min))
+    (should (eq 'reaction (slack-emoji-test--dwim-branch)))))
+
+(ert-deftest slack-emoji-test/dwim-inserts-while-typing ()
+  "In the input area the emoji is inserted, even when the typed text
+inherited the timestamp of the message above it."
+  (slack-emoji-test--with-message-buffer
+    (goto-char (point-max))
+    (insert (propertize "typing " 'ts slack-emoji-test--ts))
+    ;; the timestamp is on this line, so only the input marker tells the
+    ;; input area apart from a message
+    (should (equal slack-emoji-test--ts (slack-get-ts)))
+    (should (eq 'insert (slack-emoji-test--dwim-branch)))))
+
+(ert-deftest slack-emoji-test/dwim-inserts-in-a-buffer-without-messages ()
+  "A buffer with no input marker, a compose or edit buffer, inserts."
+  (with-temp-buffer
+    (insert "a draft")
+    (should (eq 'insert (slack-emoji-test--dwim-branch)))))
+
+(ert-deftest slack-emoji-test/dwim-needs-a-message-in-the-output-area ()
+  "Off any message and outside the input area there is nothing to do."
+  (with-temp-buffer
+    (lui-mode)
+    (lui-set-prompt "test> ")
+    (let ((lui-time-stamp-position nil))
+      (lui-insert "(load more)\n" t))
+    (goto-char (point-min))
+    (should-error (slack-emoji-test--dwim-branch) :type 'user-error)))
 
 (provide 'slack-emoji-test)
 ;;; slack-emoji-test.el ends here
