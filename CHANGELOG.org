@@ -41,6 +41,16 @@ All notable changes to this project will be documented in this file.
 
 ** Added
 
+- Channel sections: a named grouping of channels in the new
+  ~slack-section.el~, and a prefix argument on ~slack-channel-select~,
+  ~slack-group-select~ and ~slack-im-select~ that asks for a section
+  before asking for a channel.  Sections are written down in the
+  ~slack-sections~ option, as channel names, patterns or functions, and
+  ~all~ and ~unread~ always exist.  Slack does not hand its sidebar
+  sections to clients -- the ~channels.category.*~ methods are gone, and
+  ~activity.feed~ only takes section ids that have to be read out of the
+  web client's network tab -- so the grouping is kept on this side
+  instead, where it can also be used without knowing any ids.
 - ~slack-channel-select-archived~ lists a team's archived channels and
   opens the selected one.  Archived channels count as hidden rooms, so
   the regular selection leaves them out, and they are not part of the

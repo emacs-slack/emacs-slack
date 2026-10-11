@@ -56,6 +56,7 @@
 (require 'slack-attachment)
 (require 'slack-emoji)
 (require 'slack-star)
+(require 'slack-section)
 
 (require 'slack-buffer)
 (require 'slack-room-info-buffer)

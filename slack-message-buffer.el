@@ -28,6 +28,7 @@
 (require 'eieio)
 (require 'seq)
 (require 'slack-room)
+(require 'slack-section)
 (require 'slack-util)
 (require 'slack-room-buffer)
 (require 'slack-buffer)
@@ -1173,36 +1174,53 @@ Reads the `user-id' text property placed on mention text by
       (slack-buffer-display
        (slack-create-user-profile-buffer team user-id))))
 
-(defun slack-im-select ()
-  (interactive)
-  (if-let* ((team (slack-team-select))
-            (candidates (cl-loop for team in (list team)
-                                 for ims = (cl-remove-if #'(lambda (im)
-                                                             (not (slack-room-open-p im)))
-                                                         (slack-team-ims team))
-                                 nconc ims))
-            (room (slack-room-select candidates team)))
-      (slack-room-display room team)
-    (user-error "No open private chats available.")))
-
-(defun slack-group-select ()
-  (interactive)
+(defun slack-im-select (&optional section)
+  "Select a private chat and display it.
+With a prefix argument, ask for a section from `slack-sections' first and
+offer the DMs in it."
+  (interactive "P")
   (let* ((team (slack-team-select))
-         (room (slack-room-select
-                (cl-loop for team in (list team)
-                         for groups = (slack-team-groups team)
-                         nconc groups)
-                team)))
+         (section (and section (slack-section-read "Select Section of DMs: ")))
+         (candidates (cl-loop for team in (list team)
+                              for ims = (cl-remove-if #'(lambda (im)
+                                                          (not (slack-room-open-p im)))
+                                                      (slack-team-ims team))
+                              nconc ims))
+         (room (if section
+                   (slack-section-rooms-select candidates team section)
+                 (and candidates (slack-room-select candidates team)))))
+    (unless room
+      (user-error "No open private chats available."))
     (slack-room-display room team)))
 
-(defun slack-channel-select ()
-  (interactive)
+(defun slack-group-select (&optional section)
+  "Select a private group and display it.
+With a prefix argument, ask for a section from `slack-sections' first and
+offer the groups in it."
+  (interactive "P")
   (let* ((team (slack-team-select))
-         (room (slack-room-select
-                (cl-loop for team in (list team)
-                         for channels = (slack-team-channels team)
-                         nconc channels)
-                team)))
+         (section (and section (slack-section-read "Select Section of Groups: ")))
+         (groups (cl-loop for team in (list team)
+                          for groups = (slack-team-groups team)
+                          nconc groups))
+         (room (if section
+                   (slack-section-rooms-select groups team section)
+                 (slack-room-select groups team))))
+    (slack-room-display room team)))
+
+(defun slack-channel-select (&optional section)
+  "Select a channel and display it.
+With a prefix argument, ask for a section from `slack-sections' first and
+offer the channels in it."
+  (interactive "P")
+  (let* ((team (slack-team-select))
+         (section (and section (slack-section-read "Select Section of Channels: ")))
+         (channels (cl-loop for team in (list team)
+                            for channels = (slack-team-channels team)
+                            nconc channels))
+         (room (if section
+                   (slack-section-rooms-select channels team section)
+                 (slack-room-select channels team))))
     (slack-room-display room team)))
 
 (defun slack-channel-select-archived ()

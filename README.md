@@ -193,6 +193,27 @@ expense of functionality (like you will not have all public channel
 available and search will not display room names when it doesn't know
 about them).
 
+### Sections
+
+Slack groups channels in sidebar sections, but it does not pass that
+grouping on to clients, so emacs-slack lets you write your own down in
+`slack-sections` and pick a channel by the section it is in:
+
+```elisp
+(setq slack-sections
+      '((priority . ("^eng-" "incidents"))
+        (low . ("random" "lounge"))))
+```
+
+A section entry is a channel name, a pattern, or a function of the room
+and the team; a leading `#` in a name is ignored. `all` and `unread`
+always exist on top of the ones you configure, `unread` meaning rooms
+with unread messages or mentions.
+
+Call `slack-channel-select`, `slack-group-select` or `slack-im-select`
+with a prefix argument (`C-u`) to be asked for a section first, and only
+the channels in it are offered afterwards.
+
 ## Notification
 
 See [alert](https://github.com/jwiegley/alert).
