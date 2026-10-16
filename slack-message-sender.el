@@ -144,8 +144,29 @@ In this context an indentation level is a pair of spaces."
           (slack-im-names team)
           (slack-channel-names team)))
 
-(defun slack-message-embed-channel ()
-  (interactive)
+(defun slack-message-embed-literal-p (char arg)
+  "Return non-nil when typing CHAR should insert it instead of embedding.
+That is the case when the command was invoked by typing CHAR itself
+and either a prefix ARG was given or point directly follows a
+non-whitespace character, e.g. the \"#\" in \"c#\" or the \"@\" in an
+email address.  This keeps \"#\" and \"@\" usable as plain text when
+they are bound to the embed commands."
+  (and (eq last-command-event char)
+       (or arg
+           (and (char-before)
+                (not (string-match-p "[[:space:](\"'`]"
+                                     (string (char-before))))))))
+
+(defun slack-message-embed-channel (&optional arg)
+  "Insert a channel mention chosen from a list.
+When bound to \"#\", insert a literal \"#\" instead with a prefix ARG
+or when point directly follows a non-whitespace character."
+  (interactive "P")
+  (if (slack-message-embed-literal-p ?# arg)
+      (insert "#")
+    (slack-message--embed-channel)))
+
+(defun slack-message--embed-channel ()
   (slack-if-let* ((buf slack-current-buffer)
                   (team (slack-buffer-team buf)))
       (slack-select-from-list
@@ -173,8 +194,16 @@ In this context an indentation level is a pair of spaces."
                                          display
                                          (format "<!%s>" keyword))))
 
-(defun slack-message-embed-mention ()
-  (interactive)
+(defun slack-message-embed-mention (&optional arg)
+  "Insert a user, user group or keyword mention chosen from a list.
+When bound to \"@\", insert a literal \"@\" instead with a prefix ARG
+or when point directly follows a non-whitespace character."
+  (interactive "P")
+  (if (slack-message-embed-literal-p ?@ arg)
+      (insert "@")
+    (slack-message--embed-mention)))
+
+(defun slack-message--embed-mention ()
   (slack-if-let* ((buf slack-current-buffer)
                   (team (slack-buffer-team buf)))
       (let* ((keyworkds (list (list "here" :name "here" :type 'keyword)
