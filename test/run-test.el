@@ -1428,7 +1428,8 @@ just the sender."
    "slack-stars-test.el"
    "slack-emoji-test.el"
    "slack-room-buffer-test.el"
-   "slack-thread-message-buffer-test.el"))
+   "slack-thread-message-buffer-test.el"
+   "slack-read-mark-test.el"))
 
 (dolist (test-file slack-tests-to-run)
   (load (expand-file-name
