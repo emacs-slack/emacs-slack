@@ -134,6 +134,10 @@
   (add-hook 'lui-pre-output-hook 'slack-handle-lazy-conversation-name nil t)
   ;; TODO move to `slack-room-buffer' ?
   (cursor-sensor-mode)
+  (add-hook 'post-command-hook #'slack-message-buffer-mark-seen nil t)
+  (when (boundp 'after-focus-change-function)
+    (add-function :after after-focus-change-function
+                  #'slack-message-buffer-mark-seen-on-focus))
   (setq-local lui-max-buffer-size nil))
 
 ;; Typing "@" or "#" at the start of a word opens the mention picker;
@@ -229,18 +233,19 @@ and forces recomputation of load-more placeholders next time.
   (slack-room-latest (slack-buffer-room this) (slack-buffer-team this)))
 
 (cl-defmethod slack-buffer-buffer ((this slack-message-buffer))
+  "Return the Emacs buffer behind THIS, creating it on first use.
+Looking the buffer up must not touch the read mark: every incoming message
+resolves the buffer of its room through here, shown on screen or not, so
+marking the room read at this point marks background rooms read the moment a
+message arrives.  The mark moves in `slack-buffer-display' and
+`slack-buffer-update' instead."
   (let ((buffer-already-exists-p (get-buffer (slack-buffer-name this)))
         (buffer (cl-call-next-method))
         (last-read (slack-buffer-last-read this)))
     (with-current-buffer buffer
       (if (slack-team-mark-as-read-immediatelyp (slack-buffer-team this))
-          (progn
-            (unless buffer-already-exists-p
-              (goto-char (marker-position lui-input-marker)))
-            (and (slack-buffer-latest-ts this)
-                 (slack-buffer-update-mark-request this
-                                                   (slack-buffer-latest-ts this))))
-
+          (unless buffer-already-exists-p
+            (goto-char (marker-position lui-input-marker)))
 
         (unless buffer-already-exists-p
           (when (or (string= "0" last-read)
@@ -251,6 +256,82 @@ and forces recomputation of load-more placeholders next time.
           (slack-buffer-update-marker-overlay this))))
 
     buffer))
+
+;; Reading follows the rule of the official clients: a room is read when
+;; its newest message is on screen, that is the buffer is shown in a window,
+;; the frame has focus, and the window is scrolled down far enough to show
+;; the message.  A buffer that is hidden, shown in a frame you are not
+;; looking at, or scrolled up into older history keeps the room unread, so
+;; the phone still shows the message as new.
+
+(defun slack-frame-focused-p (frame)
+  "Non-nil when FRAME has keyboard focus, or when Emacs cannot tell."
+  (if (fboundp 'frame-focus-state)
+      ;; t means focused, `unknown' is what a tty reports: count it as seen
+      (not (null (frame-focus-state frame)))
+    t))
+
+(defun slack-buffer-position-on-screen-p (pos window)
+  "Non-nil when POS of WINDOW's buffer is visible in WINDOW on a focused frame."
+  (and (slack-frame-focused-p (window-frame window))
+       (pos-visible-in-window-p pos window)))
+
+(cl-defmethod slack-buffer-latest-position ((this slack-message-buffer))
+  "Position of the newest message of THIS in its buffer, or nil."
+  (slack-if-let* ((latest (slack-buffer-latest-ts this))
+                  (not-empty (not (string= "0" latest))))
+      (with-current-buffer (slack-buffer-buffer this)
+        ;; newest message sits at the bottom, so scan from the end
+        (slack-buffer-ts-eq (point-max) (point-min) latest))))
+
+(cl-defmethod slack-buffer-latest-on-screen-p ((this slack-message-buffer))
+  "Non-nil when the newest message of THIS is on screen in a focused frame."
+  (slack-if-let* ((buffer (slack-buffer-buffer this))
+                  (window (get-buffer-window buffer 'visible))
+                  (pos (slack-buffer-latest-position this)))
+      (slack-buffer-position-on-screen-p pos window)))
+
+(cl-defmethod slack-buffer-mark-latest-read ((_this slack-buffer) &optional _seen))
+
+(cl-defmethod slack-buffer-mark-latest-read ((this slack-message-buffer) &optional seen)
+  "Move the read mark of THIS room to its newest message once it was seen.
+SEEN non-nil asserts the user is looking at the newest message; otherwise
+`slack-buffer-latest-on-screen-p' decides.  Nothing happens when the team
+does not mark rooms read immediately or the mark is already there."
+  (when (slack-team-mark-as-read-immediatelyp (slack-buffer-team this))
+    (let ((latest (slack-buffer-latest-ts this)))
+      (when (and latest
+                 (not (string= "0" latest))
+                 (string< (slack-buffer-last-read this) latest)
+                 (or seen (slack-buffer-latest-on-screen-p this)))
+        (slack-buffer-update-mark-request this latest)))))
+
+(cl-defmethod slack-buffer-display ((this slack-message-buffer))
+  "Show THIS room and mark it read when it opens on its newest message.
+The window has not been drawn yet at this point, so visibility is judged by
+point: a fresh buffer starts at the prompt, right below the newest message.
+A buffer left scrolled up stays unread until the user scrolls down."
+  (prog1 (cl-call-next-method)
+    (slack-if-let* ((pos (slack-buffer-latest-position this)))
+        (slack-buffer-mark-latest-read
+         this (with-current-buffer (slack-buffer-buffer this)
+                (<= pos (point)))))))
+
+(defun slack-message-buffer-mark-seen ()
+  "Mark the room read once its newest message scrolled into view.
+Runs after every command in a message buffer: scrolling down to a message
+that arrived while the window was scrolled up, or coming back to a buffer
+that gathered messages in the background, both count as reading it."
+  (when slack-current-buffer
+    (slack-buffer-mark-latest-read slack-current-buffer)))
+
+(defun slack-message-buffer-mark-seen-on-focus ()
+  "After a frame gains focus, mark the rooms whose newest message it shows."
+  (dolist (frame (frame-list))
+    (when (and (frame-visible-p frame) (slack-frame-focused-p frame))
+      (dolist (window (window-list frame 'no-minibuffer))
+        (with-current-buffer (window-buffer window)
+          (slack-message-buffer-mark-seen))))))
 
 (cl-defmethod slack-buffer-visible-message-p ((this slack-message-buffer) message)
   (slack-message-visible-p message (slack-buffer-team this)))
@@ -360,15 +441,13 @@ the buffer in place would be more work than starting over."
        (slack-buffer-update-marker-overlay this)))))
 
 (cl-defmethod slack-buffer-update ((this slack-message-buffer) message &key replace)
-  (let ((team (slack-buffer-team this))
-        (buffer (slack-buffer-buffer this)))
-    (when (and (slack-team-mark-as-read-immediatelyp team)
-               (slack-buffer-in-current-frame buffer))
-      (slack-buffer-update-mark-request this (slack-ts message)))
-
+  (let ((buffer (slack-buffer-buffer this)))
     (if replace (slack-buffer-replace this message)
       (with-current-buffer buffer
-        (slack-buffer-insert-messages this (list message))))))
+        (slack-buffer-insert-messages this (list message))))
+    ;; the room is read only if the message landed on screen
+    (unless replace
+      (slack-buffer-mark-latest-read this))))
 
 (cl-defmethod slack-buffer-display-message-compose-buffer ((this slack-message-buffer))
   (let ((buf (slack-create-room-message-compose-buffer (slack-buffer-room this)

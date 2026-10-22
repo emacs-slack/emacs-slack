@@ -7,6 +7,11 @@ All notable changes to this project will be documented in this file.
 
 ** Fixed
 
+- Rooms are marked read only when their newest message is on screen: the
+  buffer is shown in a focused frame and scrolled down to it, as in the
+  official clients.  Looking a room's buffer up marked it read, and every
+  incoming message does that, so rooms open in the background looked read
+  on the phone as soon as someone wrote.
 - Numbered lists render as "1." again for every item instead of
   continuing "1., 2., ...".  When nested content (say a sub-bullet list)
   interrupts an ordered list, Slack serializes the items after it as a
