@@ -44,6 +44,7 @@
 (require 'slack-channel)
 (require 'slack-emoji)
 (require 'slack-defcustoms)
+(require 'slack-message-fold)
 
 (defvar slack-completing-read-function)
 (defvar slack-channel-button-keymap
@@ -140,6 +141,9 @@
 ;; see `slack-message-embed-on-typing'.
 (define-key slack-message-buffer-mode-map (kbd "@") #'slack-message-embed-mention)
 (define-key slack-message-buffer-mode-map (kbd "#") #'slack-message-embed-channel)
+;; TAB folds or unfolds the previews of the message at point;
+;; see `slack-message-toggle-preview-fold'.
+(define-key slack-message-buffer-mode-map (kbd "TAB") #'slack-message-toggle-preview-fold)
 
 (defclass slack-message-buffer (slack-room-buffer)
   ((oldest :initform nil :type (or null string))
@@ -765,7 +769,8 @@ history sitting under a gap marker."
          (prev (unless no-merge-p
                  (or prev-message (slack-buffer-prev-message this message))))
          (merge-message-p (slack-buffer-merge-message-p this message prev))
-         (text (slack-buffer-message-text this message merge-message-p)))
+         (text (slack-buffer-message-text this message merge-message-p))
+         (beg (marker-position lui-output-marker)))
     (when merge-message-p
       (save-excursion
         (goto-char lui-output-marker)
@@ -785,7 +790,8 @@ history sitting under a gap marker."
      'ts ts
      'slack-last-ts lui-time-stamp-last
      'cursor-sensor-functions '(slack-buffer-subscribe-cursor-event))
-    (lui-insert "" t)))
+    (lui-insert "" t)
+    (slack-message-fold--maybe-auto-fold beg (marker-position lui-output-marker))))
 
 (cl-defmethod slack-buffer-replace ((this slack-message-buffer) message)
   (with-current-buffer (slack-buffer-buffer this)
@@ -825,7 +831,9 @@ history sitting under a gap marker."
               (when end
                 (put-text-property (point) end
                                    'merged-message-p
-                                   merge-message-p)))
+                                   merge-message-p))
+              (slack-message-fold--maybe-auto-fold
+               (point) (or end (point-max))))
             (slack-if-let*
                 ((next (slack-buffer-next-message this
                                                   message))

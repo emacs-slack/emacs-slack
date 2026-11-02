@@ -84,6 +84,12 @@ All notable changes to this project will be documented in this file.
   (~slack-insert-emoji~), in the input area as well as in a compose or
   edit buffer.  One key can take the place of the two commands, which
   stay available on their own.
+- Previews fold in channel and thread buffers: =TAB=
+  (~slack-message-toggle-preview-fold~) hides the attachments and file
+  previews of the message at point behind a one-line hint, so a long
+  unfurl no longer pushes the rest of the thread off the screen.
+  ~slack-message-fold-previews-by-default~ (default nil) folds the
+  previews of newly rendered messages automatically.
 
 ** Changed
 

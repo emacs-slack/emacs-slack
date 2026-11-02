@@ -100,22 +100,30 @@ state, so TEAM's saved for later list is consulted as well."
                 'help-echo #'slack-reaction-help-echo)))
 
 (cl-defmethod slack-message-to-string ((m slack-message) team)
-  "Create a propertized string for the message M of TEAM."
+  "Create a propertized string for the message M of TEAM.
+
+The attachment and file parts are marked with the
+`slack-message-preview' property, so that `slack-message-fold'
+can fold them (see `slack-message-toggle-preview-fold')."
   (let* ((header (slack-message-header m team))
-         (attachment (mapconcat #'(lambda (attachment)
-                                    (slack-message-to-string attachment team))
-                                (when slack-show-attachments-p (oref m attachments))
-                                "\n"))
+         (attachment (propertize
+                      (mapconcat #'(lambda (attachment)
+                                     (slack-message-to-string attachment team))
+                                 (when slack-show-attachments-p (oref m attachments))
+                                 "\n")
+                      'slack-message-preview t))
          (body (format "%s%s"
                        (if (slack-message-display-thread-sign-p m team)
                            slack-visible-thread-sign
                          "")
                        (slack-message-body m team)))
          (files (let ((ts (slack-ts m)))
-                  (mapconcat #'(lambda (file)
-                                 (slack-message-to-string file ts team))
-                             (oref m files)
-                             "\n\n")))
+                  (propertize
+                   (mapconcat #'(lambda (file)
+                                  (slack-message-to-string file ts team))
+                              (oref m files)
+                              "\n\n")
+                   'slack-message-preview t)))
          (reactions (mapconcat #'(lambda (_r) (slack-reaction-to-string _r team))
                                (slack-message-reactions m)
                                " "))

@@ -44,6 +44,9 @@
 ;; see `slack-message-embed-on-typing'.
 (define-key slack-thread-message-buffer-mode-map (kbd "@") #'slack-message-embed-mention)
 (define-key slack-thread-message-buffer-mode-map (kbd "#") #'slack-message-embed-channel)
+;; TAB folds or unfolds the previews of the message at point;
+;; see `slack-message-toggle-preview-fold'.
+(define-key slack-thread-message-buffer-mode-map (kbd "TAB") #'slack-message-toggle-preview-fold)
 
 (defclass slack-thread-message-buffer (slack-room-buffer)
   ((thread-ts :initarg :thread-ts :type string)

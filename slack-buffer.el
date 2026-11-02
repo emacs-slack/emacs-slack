@@ -32,6 +32,7 @@
 (require 'slack-room)
 (require 'slack-image)
 (require 'slack-message-formatter)
+(require 'slack-message-fold)
 (require 'dash)
 (declare-function emojify-mode "emojify")
 (declare-function slack-open-message "slack-message-buffer")
@@ -248,7 +249,8 @@ placeholder so the buffer does not wait forever."
 (cl-defmethod slack-buffer-insert ((this slack-buffer) message &optional not-tracked-p)
   (let ((lui-time-stamp-format "[%Y-%m-%d %H:%M] ")
         (lui-time-stamp-time (slack-message-time-stamp message))
-        (team (slack-buffer-team this)))
+        (team (slack-buffer-team this))
+        (beg (marker-position lui-output-marker)))
     (lui-insert-with-text-properties
      (slack-message-to-string message team)
      'not-tracked-p not-tracked-p
@@ -256,6 +258,7 @@ placeholder so the buffer does not wait forever."
      'slack-last-ts lui-time-stamp-last
      'cursor-sensor-functions '(slack-buffer-subscribe-cursor-event))
     (lui-insert "" t)
+    (slack-message-fold--maybe-auto-fold beg (marker-position lui-output-marker))
     ))
 
 (defun slack-load-more-message ()
