@@ -137,5 +137,79 @@ inherited the timestamp of the message above it."
     (goto-char (point-min))
     (should-error (slack-emoji-test--dwim-branch) :type 'user-error)))
 
+;;; the emoji picker data
+;;
+;; `slack-select-emoji' only accepts a picked emoji that is present in
+;; `slack-emoji-master' (unicode names) or the team's `emoji-master'
+;; (workspace names).  `slack-emoji-fetch-master-data' used to fill the
+;; first through a `:success' callback, which `slack-request' silently
+;; drops for `:sync' requests: the table stayed empty and the picker
+;; rejected every candidate, so both `slack-add-reaction' and
+;; `slack-emoji-dwim' listed nothing.
+
+(defconst slack-emoji-test--master-data
+  '((:name "#️⃣" :short_names ("hash" "key" "1234-20e3"))
+    (:name "😉" :short_names ("winking_face" "wink"))
+    (:name "no-short-names-here")))
+
+(defun slack-emoji-test--with-fetched-master-data (body)
+  "Run BODY with `slack-emoji-fetch-master-data''s network stubbed.
+The stub answers with `slack-emoji-test--master-data' synchronously,
+the way a real sync request leaves its response on the request object."
+  (let* ((fake-resp (make-request-response :data slack-emoji-test--master-data))
+         (fake-req (make-instance 'slack-request-request)))
+    (oset fake-req response fake-resp)
+    (cl-letf (((symbol-function 'slack-request) (lambda (_req) fake-req)))
+      (funcall body))))
+
+(defun slack-emoji-test--with-emojify-user-emojis (value body)
+  "Set the global `emojify-user-emojis' to VALUE for BODY, restore after.
+A plain let is not enough: this Emacs does not treat the void
+\\(defvar emojify-user-emojis) declaration as dynamic for let."
+  (let ((had (boundp 'emojify-user-emojis))
+        (old (and (boundp 'emojify-user-emojis) emojify-user-emojis)))
+    (unwind-protect
+        (progn
+          (setq emojify-user-emojis value)
+          (funcall body))
+      (if had (setq emojify-user-emojis old)
+        (makunbound 'emojify-user-emojis)))))
+
+(ert-deftest slack-emoji-test/fetch-master-data-fills-hash ()
+  "A sync fetch fills `slack-emoji-master' even though the request
+wrapper drops sync callbacks."
+  (let ((slack-emoji-master (make-hash-table :test 'equal))
+        (team (make-instance 'slack-team :name "test-team" :id "T99999")))
+    (slack-emoji-test--with-fetched-master-data
+      (lambda ()
+        (slack-emoji-fetch-master-data team)))
+    (should (> (hash-table-count slack-emoji-master) 0))
+    (should (gethash ":hash:" slack-emoji-master))
+    (should (gethash ":wink:" slack-emoji-master))))
+
+(ert-deftest slack-emoji-test/sync-team-emoji-master-rebuilds-when-empty ()
+  "A team whose `emoji-master' was lost to a reconnect gets it rebuilt
+from the emojis emojify already knows, without network."
+  (let ((team (make-instance 'slack-team :name "test-team" :id "T99999")))
+    (should (zerop (hash-table-count (oref team emoji-master))))
+    (slack-emoji-test--with-emojify-user-emojis
+        '((":custom:" ("name" . "custom")
+           ("image" . "path.png")
+           ("style" . "github")))
+      (lambda ()
+        (slack-emoji-sync-team-emoji-master team)
+        (should (gethash ":custom:" (oref team emoji-master)))))))
+
+(ert-deftest slack-emoji-test/sync-team-emoji-master-keeps-existing-table ()
+  "A team that already has its emoji-master is left alone."
+  (let ((team (make-instance 'slack-team :name "test-team" :id "T99999")))
+    (puthash ":already-there:" t (oref team emoji-master))
+    (slack-emoji-test--with-emojify-user-emojis
+        '((":custom:" ("name" . "custom")))
+      (lambda ()
+        (slack-emoji-sync-team-emoji-master team)
+        (should (gethash ":already-there:" (oref team emoji-master)))
+        (should (null (gethash ":custom:" (oref team emoji-master))))))))
+
 (provide 'slack-emoji-test)
 ;;; slack-emoji-test.el ends here

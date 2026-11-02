@@ -7,6 +7,18 @@ All notable changes to this project will be documented in this file.
 
 ** Fixed
 
+- The emoji picker (`slack-add-reaction`, `slack-emoji-dwim`,
+  `slack-insert-emoji`) listed no candidates.  It only accepts an emoji
+  found in `slack-emoji-master' (unicode short names) or the team's
+  `emoji-master' (workspace names), and both tables were empty:
+  `slack-emoji-fetch-master-data' filled the first through a =:success=
+  callback, which `slack-request' silently drops for =:sync= requests,
+  so it never ran (the response is now read directly from the sync
+  request); and a team re-registered with fresh credentials got a new
+  team object while the batched download was still filling the old one's
+  table (now rebuilt from what emojify already knows when it is found
+  empty).
+
 - Room events from the websocket apply again: read markers
   (=channel_marked=, =group_marked=, =im_marked=), channels created,
   renamed, archived, unarchived or deleted, and members joining or

@@ -190,7 +190,8 @@ This runs asynchronously, splitting the emojis in batches of `slack-emoji-job-ba
 
 (defun slack-select-emoji (team)
   "Select emoji for TEAM."
-  (unless (< 0 (hash-table-count slack-emoji-master)) (slack-emoji-fetch-master-data (car (hash-table-values slack-teams-by-token))))
+  (unless (< 0 (hash-table-count slack-emoji-master)) (slack-emoji-fetch-master-data team))
+  (slack-emoji-sync-team-emoji-master team)
   (if (and (fboundp 'emojify-completing-read)
            (fboundp 'emojify-download-emoji-maybe))
       (progn (emojify-download-emoji-maybe)
@@ -222,26 +223,50 @@ This runs asynchronously, splitting the emojis in batches of `slack-emoji-job-ba
     )))
 
 (defun slack-emoji-fetch-master-data (team)
-  (cl-labels
-      ((success (&key data &allow-other-keys)
-         (slack-request-handle-error
-          (data "slack-emoji-fetch-master-data")
-          (cl-loop for emoji in data
-                   do (let ((short-names (plist-get emoji :short_names)))
-                        (when short-names
-                          (cl-loop for name in short-names
-                                   do (puthash (format ":%s:" name)
-                                               t
-                                               slack-emoji-master))))))))
-    (slack-request
-     (slack-request-create
-      slack-emoji-master-data-url
-      team
-      :type "GET"
-      :success #'success
-      :without-auth t
-      :sync t
-      ))))
+  "Fetch the unicode emoji master data and fill `slack-emoji-master'.
+
+The request is synchronous, and `slack-request' drops `:success'
+callbacks for sync requests, so the response has to be read here.
+As written before, the callback never ran and the hash stayed
+empty, which made `slack-select-emoji''s predicate reject every
+candidate and the emoji picker list nothing."
+  (let* ((req (slack-request
+               (slack-request-create
+                slack-emoji-master-data-url
+                team
+                :type "GET"
+                :without-auth t
+                :sync t)))
+         (data (and req
+                    (slot-boundp req 'response)
+                    (oref req response)
+                    (request-response-data (oref req response)))))
+    (slack-request-handle-error
+     (data "slack-emoji-fetch-master-data")
+     (cl-loop for emoji in data
+              do (let ((short-names (plist-get emoji :short_names)))
+                   (when short-names
+                     (cl-loop for name in short-names
+                              do (puthash (format ":%s:" name)
+                                          t
+                                          slack-emoji-master))))))))
+
+(defun slack-emoji-sync-team-emoji-master (team)
+  "Populate TEAM's `emoji-master' from what emojify already knows.
+
+`slack-download-emoji' fills the team table as it downloads, but
+reconnecting with fresh credentials (say after a token refresh)
+creates a new team object while the batched download keeps filling
+the old one: a reconnected team can end up with an empty table
+despite the emojis being loaded.  The picker's predicate looks
+emojis up in that table, so rebuild it when it is empty.  The
+emojis are already in `emojify-user-emojis' (alist keyed by
+\":name:\" strings), so this needs no network."
+  (when (and (boundp 'emojify-user-emojis)
+             (< 0 (length emojify-user-emojis))
+             (zerop (hash-table-count (oref team emoji-master))))
+    (dolist (emoji emojify-user-emojis)
+      (puthash (car emoji) t (oref team emoji-master)))))
 
 (defun slack-insert-emoji ()
   "Insert emoji in slack buffer."
