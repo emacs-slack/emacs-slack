@@ -270,5 +270,66 @@
     (cl-find-if #'(lambda (e) (string= action-id (slack-block-action-id e)))
                 elements)))
 
+(defface slack-container-block-title-face
+  '((t (:weight bold :height 1.1)))
+  "Face for container layout block title."
+  :group 'slack)
+
+;; Container blocks group other layout blocks under a title, e.g. the
+;; AI agent approval cards: a "Send message" title over a section with
+;; the message details and a nested actions block with Yes/No buttons.
+(defclass slack-container-layout-block (slack-layout-block)
+  ((type :initarg :type :type string :initform "container")
+   (title :initarg :title :type (or null slack-text-message-composition-object)
+          :initform nil)
+   (has-header-divider :initarg :has_header_divider :type boolean :initform nil)
+   (child-blocks :initarg :child_blocks :type list :initform nil)))
+
+(defun slack-create-container-layout-block (payload)
+  (make-instance 'slack-container-layout-block
+                 :type (plist-get payload :type)
+                 :block_id (plist-get payload :block_id)
+                 :title (slack-create-text-message-composition-object
+                         (plist-get payload :title))
+                 :has_header_divider (eq t (plist-get payload :has_header_divider))
+                 :child_blocks (mapcar #'slack-create-layout-block
+                                       (plist-get payload :child_blocks))
+                 :payload payload))
+
+(cl-defmethod slack-block-to-string ((this slack-container-layout-block) &optional option)
+  (with-slots (title has-header-divider child-blocks) this
+    (let ((divider (when has-header-divider
+                     (make-string (or lui-fill-column 0) ?-))))
+      (slack-format-message
+       (when title
+         (propertize (slack-block-to-string title option)
+                     'face 'slack-container-block-title-face))
+       divider
+       (mapconcat #'(lambda (child)
+                      (slack-block-to-string child option))
+                  child-blocks
+                  "\n")))))
+
+;; nested rich-text blocks convert themselves to mrkdwn; the other
+;; layout children do not, so fall back to their rendered text
+(cl-defmethod slack-block-to-mrkdwn ((this slack-container-layout-block) &optional option)
+  (with-slots (title child-blocks) this
+    (slack-format-message
+     (when title (slack-block-to-string title option))
+     (mapconcat #'(lambda (child)
+                    (if (eq (eieio-object-class child) 'slack-rich-text-block)
+                        (slack-block-to-mrkdwn child option)
+                      (slack-block-to-string child option)))
+                child-blocks
+                "\n\n"))))
+
+(cl-defmethod slack-block-find-action ((this slack-container-layout-block) action-id)
+  "Find ACTION-ID among the buttons of THIS's nested blocks."
+  (with-slots (child-blocks) this
+    (cl-find-if #'identity
+                (mapcar #'(lambda (child)
+                            (slack-block-find-action child action-id))
+                        child-blocks))))
+
 (provide 'slack-block-layout)
 ;;; slack-block-layout.el ends here

@@ -64,6 +64,8 @@
       (slack-create-video-layout-block payload))
      ((string= "input" type)
       (slack-create-input-layout-block payload))
+     ((string= "container" type)
+      (slack-create-container-layout-block payload))
      (t (make-instance 'slack-layout-block
                        :type type
                        :payload payload))

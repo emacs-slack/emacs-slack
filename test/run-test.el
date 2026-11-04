@@ -372,6 +372,36 @@ text property and a keymap so it can be clicked to open a profile."
          (context (slack-create-layout-block input))
          (out (slack-block-to-string context)))
     (should (equal "For more info, contact support@acme.inc [Image]" out)))
+  ;; slack-container-layout-block
+  (let* ((lui-fill-column 10)
+         (input '(:type "container" :block_id "ai_agent_action:test-card"
+                 :title (:type "plain_text" :text "Send message")
+                 :has_header_divider t
+                 :child_blocks
+                 ((:type "section" :block_id "ai_agent_action:test-section"
+                   :fields ((:type "mrkdwn" :text "*Channel*\n#test-alert-channel")
+                            (:type "mrkdwn" :text "*Message*\nrequesting a fresh run")))
+                  (:type "actions" :block_id "ai_agent_action:test-actions"
+                   :elements ((:type "button" :action_id "test_approve"
+                                     :text (:type "plain_text" :text "Yes")
+                                     :style "primary" :value "test_action")
+                              (:type "button" :action_id "test_deny"
+                                     :text (:type "plain_text" :text "No")
+                                     :value "test_action"))))))
+         (block (slack-create-layout-block input))
+         (out (slack-block-to-string block)))
+    (should (equal out (concat "Send message"
+                               "\n----------\n"
+                               "*Channel*\n#test-alert-channel\n*Message*\nrequesting a fresh run"
+                               "\nYes No")))
+    ;; the buttons of the nested actions block stay actionable
+    (let ((button (slack-block-find-action block "test_approve")))
+      (should (eq 'slack-button-block-element (eieio-object-class button)))
+      (should (equal "Yes" (slack-block-to-string (oref button text)))))
+    (should (null (slack-block-find-action block "test_missing")))
+    ;; mrkdwn conversion does not blow up on layout children
+    (should (string-match-p "Send message" (slack-block-to-mrkdwn block)))
+    (should (string-match-p "#test-alert-channel" (slack-block-to-mrkdwn block))))
   ;; slack-static-select-block-element
   (let* ((input '(:type "static_select" :placeholder (:type "plain_text" :text "Select an item" :emoji t) :initial_option (:text (:type "plain_text" :text "Choice 1" :emoji t) :value "value-0") :options ((:text (:type "plain_text" :text "Choice 1" :emoji t) :value "value-0") (:text (:type "plain_text" :text "Choice 2" :emoji t) :value "value-1") (:text (:type "plain_text" :text "Choice 3" :emoji t) :value "value-2")) :action_id "tIzc"))
          (out (slack-block-to-string

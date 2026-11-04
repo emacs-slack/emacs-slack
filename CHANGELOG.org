@@ -7,6 +7,11 @@ All notable changes to this project will be documented in this file.
 
 ** Fixed
 
+- Subteam (usergroup) mentions are readable in captured org alerts:
+  ~slack-org-alert~ replaces the raw =<subteam^ID>= (and
+  =<!subteam^ID|@name>=) forms with the usergroup's =@handle=, looked
+  up in the team's usergroup list; mentions the team cannot resolve
+  stay untouched.
 - The emoji picker (`slack-add-reaction`, `slack-emoji-dwim`,
   `slack-insert-emoji`) listed no candidates.  It only accepts an emoji
   found in `slack-emoji-master' (unicode short names) or the team's
@@ -69,6 +74,14 @@ All notable changes to this project will be documented in this file.
 
 ** Added
 
+- Container layout blocks render: the AI agent approval cards (a
+  "Send message"-style title over a section with the details and a
+  nested actions block with Yes/No buttons) showed up as
+  "Implement ~slack-block-to-string' for ..." placeholders.  The
+  container renders its title with ~slack-container-block-title-face~,
+  an optional header divider, and its child blocks; the nested buttons
+  stay clickable (~slack-block-find-action~ searches the children), and
+  the block converts to mrkdwn for exports and yank.
 - ~slack-channel-select-archived~ lists a team's archived channels and
   opens the selected one.  Archived channels count as hidden rooms, so
   the regular selection leaves them out, and they are not part of the

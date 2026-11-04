@@ -4,6 +4,7 @@
 (require 'eieio)
 (require 'dash)
 (require 's)
+(require 'slack-usergroup)
 (require 'slack-org-alert)
 
 (defclass slack-org-alert-test-team ()
@@ -78,5 +79,49 @@ alerts without a resolvable link."
                 (nth 1 (car alert-user-configuration))))
     (slack-org-alert-setup)
     (should (= 1 (length alert-user-configuration)))))
+
+;;; subteam mentions
+
+;; The alert message keeps the raw mention form (`<subteam^ID>`, with
+;; or without the `|@name' fallback), which reads like garbage in the
+;; agenda.  The team's usergroup list resolves the ids.
+
+(ert-deftest slack-org-test-alert-subteam-mentions-readable ()
+  "Bare and fallback subteam mentions resolve to @handles."
+  (let ((info (list :title "myteam - #chan"
+                    :message "hey <subteam^S0AUPU9TP97> and <!subteam^S000|@other> please review"
+                    :data (list :team-id "T0" :room-id "C1"
+                                :ts "1730182493.679269"))))
+    (cl-letf (((symbol-function 'slack-team-find)
+               (lambda (_) (make-instance 'slack-org-alert-test-team)))
+              ((symbol-function 'slack-usergroup-find)
+               (lambda (id _team)
+                 (cond ((string= id "S0AUPU9TP97")
+                        (slack-usergroup-create
+                         (list :id id :handle "sre-oncall" :name "SRE On-Call")))
+                       ((string= id "S000")
+                        (slack-usergroup-create
+                         (list :id id :handle "other" :name "Other")))))))
+      (let ((heading (slack-org-alert--heading info)))
+        (should (s-contains? "@sre-oncall" heading))
+        (should (s-contains? "@other" heading))
+        (should-not (s-contains? "subteam" heading))))))
+
+(ert-deftest slack-org-test-alert-unresolvable-subteam-kept ()
+  "Mentions the team cannot resolve stay as they were."
+  (let ((info (list :title "t"
+                    :message "hey <subteam^SUNKNOWN>"
+                    :data (list :team-id "T0" :room-id "C1"
+                                :ts "1730182493.679269"))))
+    (cl-letf (((symbol-function 'slack-team-find)
+               (lambda (_) (make-instance 'slack-org-alert-test-team)))
+              ((symbol-function 'slack-usergroup-find) (lambda (_id _team) nil)))
+      (should (s-contains? "<subteam^SUNKNOWN>"
+                           (slack-org-alert--heading info))))))
+
+(ert-deftest slack-org-test-alert-without-team-keeps-mentions ()
+  "Alerts without message identity keep the raw mention text."
+  (let ((info (list :title "t" :message "hey <subteam^S0>")))
+    (should (s-contains? "<subteam^S0>" (slack-org-alert--heading info)))))
 
 ;;; slack-org-alert-test.el ends here

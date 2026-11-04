@@ -49,6 +49,13 @@
 
 (declare-function org-save-all-org-buffers "org")
 (declare-function org-agenda-todo "org-agenda")
+(declare-function slack-usergroup-find "slack-usergroup" (id team))
+
+(defconst slack-org-alert--subteam-regexp
+  "<!?subteam\\^\\([A-Za-z0-9]+\\)\\(?:|[^>]*\\)?>"
+  "Subteam mention: `<!subteam^ID|@name>' or the bare `<subteam^ID>'.
+Both forms appear in alert texts, the fallback name is often
+missing.")
 
 (defgroup slack-org-alert nil
   "Capture Slack message alerts as Org headings."
@@ -103,11 +110,35 @@ identity and return nil."
              :ts (plist-get data :ts)
              :thread-ts (plist-get data :ts))))))
 
+(defun slack-org-alert--subteam-names (text team)
+  "Replace subteam mentions in TEXT with the usergroup's @handle.
+TEAM's usergroups resolve the ids; mentions the TEAM does not
+know (usergroup list not fetched, or deleted group) stay untouched,
+as does TEXT when TEAM is nil."
+  (if (and team (fboundp 'slack-usergroup-find)
+           (string-match-p slack-org-alert--subteam-regexp text))
+      (replace-regexp-in-string
+       slack-org-alert--subteam-regexp
+       (lambda (mention)
+         (-if-let (group (slack-usergroup-find
+                          (match-string 1 mention) team))
+             (let ((handle (oref group handle)))
+               (concat "@"
+                       (if (and handle (< 0 (length handle)))
+                           handle
+                         (oref group name))))
+           mention))
+       text)
+    text))
+
 (defun slack-org-alert--heading (info)
   "Return the Org text capturing alert INFO as a heading.
 INFO must have a resolvable link; see `slack-org-alert--link'."
-  (let* ((title (or (plist-get info :title) "Slack message"))
-         (message (or (plist-get info :message) ""))
+  (let* ((data (plist-get info :data))
+         (team (and data (slack-team-find (plist-get data :team-id))))
+         (title (or (plist-get info :title) "Slack message"))
+         (message (slack-org-alert--subteam-names
+                   (or (plist-get info :message) "") team))
          (link (slack-org-alert--link info))
          (description (s-truncate 127 (s-replace "\n" ";" message))))
     (concat
