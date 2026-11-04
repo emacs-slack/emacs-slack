@@ -148,6 +148,8 @@
                   'keymap (let ((map (make-sparse-keymap)))
                             (define-key map (kbd "RET")
                               #'slack-execute-button-block-action)
+                            (define-key map [mouse-1]
+                              #'slack-execute-button-block-action)
                             map)))))
 
 (defface slack-button-block-element-face

@@ -89,6 +89,90 @@ the permalink with `slack-open-url' instead of the browser."
           (should (equal (list permalink) opened))
           (should (null browsed)))))))
 
+(ert-deftest slack-room-buffer-test-container-card-button-runs-action ()
+  "The Yes/No buttons nested in a container approval card dispatch
+their action: the card's actions block is found through its
+container, and the action goes to Slack's agent service."
+  (slack-test-with-registered-team (team channel)
+    (let* ((ts (slack-test-ts 1))
+           (message (slack-message-create
+                     (list :type "message"
+                           :ts ts
+                           :user "U11111"
+                           :text "approve the send"
+                           :blocks (list (list :type "container"
+                                               :block_id "ai_agent_action:test-card"
+                                               :title (list :type "plain_text"
+                                                            :text "Send message")
+                                               :has_header_divider t
+                                               :child_blocks
+                                               (list (list :type "section"
+                                                           :block_id "ai_agent_action:test-section"
+                                                           :fields (list (list :type "mrkdwn"
+                                                                               :text "*Channel*\n#test-alert-channel")))
+                                                     (list :type "actions"
+                                                           :block_id "ai_agent_action:test-actions"
+                                                           :elements (list (list :type "button"
+                                                                                 :action_id "test_approve"
+                                                                                 :text (list :type "plain_text"
+                                                                                             :text "Yes")
+                                                                                 :style "primary"
+                                                                                 :value "test_value")
+                                                                           (list :type "button"
+                                                                                 :action_id "test_deny"
+                                                                                 :text (list :type "plain_text"
+                                                                                             :text "No")
+                                                                                 :value "test_value")))))))
+                     team
+                     channel))
+           executed)
+      (slack-room-set-messages channel (list message) team)
+      (with-temp-buffer
+        (let ((button (slack-block-find-action
+                       (slack-message-find-block message
+                                                 "ai_agent_action:test-actions")
+                       "test_approve")))
+          (should button)
+          (insert (propertize "card above " 'ts ts))
+          (insert (slack-block-to-string button))
+          (put-text-property (point-min) (point-max) 'ts ts)
+          (goto-char (point-min))
+          (search-forward "Yes")
+          (goto-char (match-beginning 0))
+          (cl-letf (((symbol-function 'slack-block-action-execute)
+                     (lambda (service-id actions _container _team)
+                       (setq executed (cons service-id actions)))))
+            (slack-buffer-execute-button-block-action
+             (make-instance 'slack-message-buffer
+                            :team-id "T99999"
+                            :room-id "C99999")))
+          (should executed)
+          (should (equal "BSLACKBOT" (car executed)))
+          (should (= 1 (length (cdr executed))))
+          (should (equal "test_approve"
+                          (cdr-safe (assoc-string "action_id"
+                                                  (cadr executed)))))))
+      (should (null (slack-block-find-action
+                     (slack-message-find-block message
+                                               "ai_agent_action:test-actions")
+                     "test_missing"))))))
+
+(ert-deftest slack-room-buffer-test-block-action-service-id ()
+  "AI agent card actions go to Slack's agent service, others keep
+the message-level service id."
+  (let ((message (make-instance 'slack-message
+                                :ts (slack-test-ts 1))))
+    (should (equal "BSLACKBOT"
+                   (slack-block-action-service-id
+                    (list (cons "block_id" "ai_agent_action:approval_card_actions_test")
+                          (cons "action_id" "tool_approve_test"))
+                    message)))
+    (should (equal "B01"
+                   (slack-block-action-service-id
+                    (list (cons "block_id" "b1")
+                          (cons "action_id" "a1"))
+                    message)))))
+
 (ert-deftest slack-room-buffer-test-open-url-room-level-link ()
   "A link naming a room, with no message part, opens the room itself."
   (slack-test-with-registered-team (team channel)

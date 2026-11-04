@@ -7,6 +7,14 @@ All notable changes to this project will be documented in this file.
 
 ** Fixed
 
+- The Yes/No buttons of container approval cards did nothing when
+  pressed: `slack-message-find-block' only searched the message's
+  top-level blocks, and the card's actions block is nested inside the
+  container, so the button lookup failed silently (nested blocks are
+  now found).  Also, their actions are dispatched to Slack's agent
+  service (=BSLACKBOT=) like the web client does, not to the message
+  sender's bot id, and block buttons react to =mouse-1= as well as
+  =RET=.
 - Subteam (usergroup) mentions are readable in captured org alerts:
   ~slack-org-alert~ replaces the raw =<subteam^ID>= (and
   =<!subteam^ID|@name>=) forms with the usergroup's =@handle=, looked

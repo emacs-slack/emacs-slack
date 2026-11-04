@@ -623,6 +623,24 @@ Execute this function when cursor is on some message."
       (slack-message-bot-id this)
     "B01"))
 
+(defconst slack-agent-action-service-id "BSLACKBOT"
+  "Service id Slack's web client dispatches AI agent card actions to.")
+
+(defconst slack-agent-action-block-id-prefix "ai_agent_action:"
+  "Block id prefix of AI agent approval card blocks.")
+
+(defun slack-block-action-service-id (action message)
+  "The service id dispatching ACTION of MESSAGE to its developer.
+The actions of AI agent approval cards (block ids prefixed with
+`slack-agent-action-block-id-prefix') belong to Slack's own agent
+tooling: the web client dispatches them to
+`slack-agent-action-service-id', not to the message sender's bot
+id.  Other actions keep the message-level service id."
+  (if (string-prefix-p slack-agent-action-block-id-prefix
+                       (or (cdr-safe (assoc-string "block_id" action)) ""))
+      slack-agent-action-service-id
+    (slack-message-block-action-service-id message)))
+
 (defun slack-block-find-action-from-payload (action-payload message)
   (slack-if-let* ((block-id (cdr-safe (assoc-string "block_id" action-payload)))
                   (bl (slack-message-find-block message block-id))
@@ -643,7 +661,7 @@ Execute this function when cursor is on some message."
         (slack-if-let* ((url (oref button url)))
             (slack-open-url-or-browse-url url)
           (let ((container (slack-buffer-block-action-container this message))
-                (service-id (slack-message-block-action-service-id message)))
+                (service-id (slack-block-action-service-id action message)))
             (slack-block-action-execute service-id
                                         (list action)
                                         container
@@ -716,9 +734,20 @@ Execute this function when cursor is on some message."
 
 (cl-defmethod slack-message-find-block ((this slack-message) block-id)
   (with-slots (blocks) this
-    (cl-find-if #'(lambda (e) (and (slot-boundp e 'block-id)
-                                   (string= block-id (oref e block-id))))
-                blocks)))
+    (or (cl-find-if #'(lambda (e) (and (slot-boundp e 'block-id)
+                                       (string= block-id (oref e block-id))))
+                    blocks)
+        ;; blocks nested in a container: the actions block of an AI
+        ;; agent approval card is addressed by its own block id
+        (-when-let (container (cl-find-if
+                               #'(lambda (e)
+                                   (eq (eieio-object-class e)
+                                       'slack-container-layout-block))
+                               blocks))
+          (cl-find-if #'(lambda (child)
+                          (and (slot-boundp child 'block-id)
+                               (string= block-id (oref child block-id))))
+                      (oref container child-blocks))))))
 
 (cl-defmethod slack-buffer-execute-static-select-block-action ((this slack-room-buffer))
   (slack-if-let* ((cur-point (point))
