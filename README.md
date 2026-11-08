@@ -60,6 +60,25 @@ If your token expires, you can use `slack-refresh-token` for a way to refresh in
 
 ```
 
+Note: this mode defaults on marking all the messages processed as read. 
+This will affects other clients if the mode is running, for example:
+1. emacs-slack is running
+2. mobile slack is running
+3. message arrives
+4. emacs-slack marks it read
+5. mobile slack never shows it
+
+If you want to see the message as unread in mobile, set this property on the team:
+
+```
+(slack-register-team
+     :name "clojurians"
+     ...
+     :mark-as-read-immediately nil
+     )
+```
+That will make the message read only when cursor hovered on the message.
+
 ## How to get token and cookie
 
 Use the interactive command `slack-refresh-token` because it has the
