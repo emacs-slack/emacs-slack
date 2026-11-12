@@ -7,6 +7,11 @@ All notable changes to this project will be documented in this file.
 
 ** Fixed
 
+- Profile-image fallbacks now honor the requested avatar size when SVG support
+  is unavailable, instead of rendering the original full-size image.
+- Mentions are detected using the rendered full display name and raw Slack user
+  ID, so notifications work when full-and-display-names are enabled.
+
 - The Yes/No buttons of container approval cards did nothing when
   pressed: `slack-message-find-block' only searched the message's
   top-level blocks, and the card's actions block is nested inside the
