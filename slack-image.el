@@ -326,7 +326,8 @@ when SVG support is not available.  Results are cached."
                                    </svg>"
                                   size size size size r r size size mime b64)))
                        (create-image svg 'svg t :ascent 80))
-                   (create-image file nil nil :ascent 80))
+                   (create-image file nil nil
+                                 :width size :height size :ascent 80))
                  slack-image--profile-cache))))
 
 (provide 'slack-image)

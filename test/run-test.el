@@ -1450,6 +1450,7 @@ just the sender."
    "slack-group-test.el"
    "slack-file-attach-test.el"
    "slack-image-test.el"
+   "slack-message-notification-test.el"
    "slack-permalink-test.el"
    "slack-channel-test.el"
    "slack-room-event-test.el"
@@ -1472,4 +1473,3 @@ just the sender."
 (if noninteractive
     (ert-run-tests-batch-and-exit)
   (ert t))
-

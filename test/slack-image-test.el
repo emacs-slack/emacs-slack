@@ -118,4 +118,15 @@ instead of an Emacs buffer."
                    (let ((system-type 'gnu/linux))
                      (slack-image--viewer-command path))))))
 
+(ert-deftest slack-test-profile-image-fallback-has-size ()
+  "The non-SVG profile-image fallback respects the requested size."
+  (let ((slack-image--profile-cache (make-hash-table :test 'equal)))
+    (cl-letf (((symbol-function 'image-type-available-p)
+               (lambda (_type) nil))
+              ((symbol-function 'create-image)
+               (lambda (&rest args) args)))
+      (should (equal (list "/tmp/avatar.png" nil nil
+                           :width 36 :height 36 :ascent 80)
+                     (slack-image--round-profile "/tmp/avatar.png" 36))))))
+
 ;;; slack-image-test.el ends here
