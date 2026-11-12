@@ -45,7 +45,8 @@
 (defconst slack-user-mention-regex "\\(<@\\([A-Za-z0-9]+\\)>\\)")
 (defconst slack-usergroup-mention-regex "\\(<!subteam^\\([A-Za-z0-9]+\\)>\\)")
 (defconst slack-special-mention-regex "\\(<!\\(here\\|channel\\|everyone\\)>\\)")
-(defconst slack-file-upload-complete-url "https://slack.com/api/files.completeUpload")
+(defconst slack-file-upload-complete-url
+  "https://slack.com/api/files.completeUploadExternal")
 
 (defun slack-list-indent-level (leading-space)
   "Given a LEADING-SPACE we count how many indentation levels there are.
@@ -91,17 +92,16 @@ In this context an indentation level is a pair of spaces."
         (slack-message-upload-files team
                                     files
                                     :on-error on-error
-                                    :on-success #'(lambda (files) (let ((message-payload (append (apply #'list
-                                                                                                        (cons "channel" (oref room id))
-                                                                                                        (with-temp-buffer
-                                                                                                          (insert message)
-                                                                                                          (slack-create-blocks-from-buffer)))
-                                                                                                 payload)))
-                                                                    (slack-files-upload-complete team
-                                                                                                 files
-                                                                                                 message-payload
-                                                                                                 :on-success on-success
-                                                                                                 :on-error on-error))))
+                                     :on-success #'(lambda (files) (let ((message-payload
+                                                                          (append
+                                                                           (list (cons "channel_id" (oref room id))
+                                                                                 (cons "initial_comment" message))
+                                                                           payload)))
+                                                                     (slack-files-upload-complete team
+                                                                                                  files
+                                                                                                  message-payload
+                                                                                                  :on-success on-success
+                                                                                                  :on-error on-error))))
       (let ((message-payload (append (apply #'list
                                             (cons "type" "message")
                                             (cons "channel" (oref room id))
@@ -754,11 +754,20 @@ the list is quit with \\`C-g'."
       slack-file-upload-complete-url
       team
       :type "POST"
-      :data (json-encode (append (list (cons "files" (mapcar #'(lambda (file)
-                                                                 (list (cons "id" (oref file id))
-                                                                       (cons "title" (oref file filename))))
-                                                             files)))
-                                 message-payload))
+      :data (json-encode
+             (append
+              (list (cons "files"
+                          (mapcar (lambda (file)
+                                    (list (cons "id" (oref file id))
+                                          (cons "title" (oref file filename))))
+                                  files)))
+              (when-let ((channel (cdr (assoc "channel_id" message-payload))))
+                (list (cons "channel_id" channel)))
+              (when-let ((comment (cdr (assoc "initial_comment" message-payload))))
+                (unless (slack-string-blankp comment)
+                  (list (cons "initial_comment" comment))))
+              (when-let ((thread-ts (cdr (assoc "thread_ts" message-payload))))
+                (list (cons "thread_ts" thread-ts)))))
       :headers (list (cons "Content-Type" "application/json;charset=utf-8"))
       :success #'on-complete))))
 

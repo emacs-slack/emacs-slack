@@ -29,7 +29,8 @@
 (require 'slack-request)
 (require 'slack-buffer)
 
-(defconst slack-file-get-upload-url-url "https://slack.com/api/files.getUploadURL")
+(defconst slack-file-get-upload-url-url
+  "https://slack.com/api/files.getUploadURLExternal")
 
 (defun slack-request-plain-parser ()
   (buffer-substring-no-properties (point-min) (point-max)))
@@ -82,7 +83,7 @@
                                                     team)
                                          (funcall cb nil)))
                                  (let ((url (plist-get data :upload_url))
-                                       (file-id (plist-get data :file)))
+                                       (file-id (plist-get data :file_id)))
                                    (oset this id file-id)
                                    (slack--upload-file this team url cb)))
                               (progn
@@ -93,11 +94,10 @@
        (slack-request-create
         slack-file-get-upload-url-url
         team
-        :type "POST"
-        :params (list (cons "filename" filename)
-                      (cons "length" (number-to-string (file-attribute-size (file-attributes path)))))
-        :headers (list (cons "Content-Type" "multipart/form-data"))
-        :success #'on-get-upload-url
+         :type "POST"
+         :params (list (cons "filename" filename)
+                       (cons "length" (number-to-string (file-attribute-size (file-attributes path)))))
+         :success #'on-get-upload-url
         :error #'on-error)))))
 
 (define-derived-mode slack-message-attachment-preview-buffer-mode
