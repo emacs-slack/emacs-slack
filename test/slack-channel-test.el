@@ -14,6 +14,15 @@
   "A channel ID named NAME, archived when ARCHIVED."
   (make-instance 'slack-channel :id id :name name :is_archived archived))
 
+(ert-deftest slack-channel-test-named-mpim-uses-conversation-name ()
+  "Use Slack's title for a named multi-person direct message."
+  (let ((room (make-instance 'slack-channel
+                             :id "C-MPIM"
+                             :name "Roll With It"
+                             :is_mpim t)))
+    (should (equal "Roll With It"
+                   (slack-room-name room nil)))))
+
 (ert-deftest slack-channel-test-archived-update-merges-into-team ()
   "Fetching archived channels asks for them explicitly and keeps the
 rooms the team already had."

@@ -44,10 +44,12 @@
 
 (cl-defmethod slack-room-name ((room slack-channel) team)
   (if (slack-mpim-p room)
-      (format "MPIM: %s"
-              (string-join (mapcar (lambda (userid)
-                                     (slack-user-name userid team))
-                                   (slack-room-members room)) ", "))
+      (or (and (not (slack-string-blankp (oref room name)))
+               (oref room name))
+          (format "MPIM: %s"
+                  (string-join (mapcar (lambda (userid)
+                                         (slack-user-name userid team))
+                                       (slack-room-members room)) ", ")))
     (oref room name)))
 
 (defun slack-channel-names (team &optional filter)
