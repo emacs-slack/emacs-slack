@@ -217,8 +217,33 @@ from the emojis emojify already knows, without network."
          (list (cons ":custom:" '(("image" . "old.png"))))))
     (slack-emoji-upsert-user-emoji
      (cons ":custom:" '(("image" . "new.png"))))
-    (should (equal (list (cons ":custom:" '(("image" . "new.png"))))
-                   emojify-user-emojis))))
+     (should (equal (list (cons ":custom:" '(("image" . "new.png"))))
+                    emojify-user-emojis))))
+
+(ert-deftest slack-emoji-test/download-watch-waits-for-success-callbacks ()
+  "The download watcher does not race curl's success callbacks."
+  (let* ((path (make-temp-file "slack-emoji-test"))
+         (team (make-instance 'slack-team :name "test-team" :id "T99999"))
+         (emojify-user-emojis nil)
+         (called nil))
+    (unwind-protect
+        (progn
+          (oset team emoji-download-watch-timer
+                (run-at-time 60 nil #'ignore))
+          (cl-letf (((symbol-function 'emojify-create-emojify-emojis)
+                     (lambda (&optional _force) (setq called t))))
+            (slack-team-watch-emoji-download-complete team (list path))
+            (should-not called)
+            (should (timerp (oref team emoji-download-watch-timer)))
+            (setq emojify-user-emojis
+                  (list (cons ":custom:"
+                              (list (cons "image" path)
+                                    (cons "name" "custom")
+                                    (cons "style" "github")))))
+            (slack-team-watch-emoji-download-complete team (list path))
+            (should called)
+            (should-not (timerp (oref team emoji-download-watch-timer)))))
+      (delete-file path))))
 
 (provide 'slack-emoji-test)
 ;;; slack-emoji-test.el ends here
