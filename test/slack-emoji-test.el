@@ -211,5 +211,14 @@ from the emojis emojify already knows, without network."
         (should (gethash ":already-there:" (oref team emoji-master)))
         (should (null (gethash ":custom:" (oref team emoji-master))))))))
 
+(ert-deftest slack-emoji-test/upsert-replaces-stale-user-emoji ()
+  "A refreshed emoji replaces an old image path for the same shortcode."
+  (let ((emojify-user-emojis
+         (list (cons ":custom:" '(("image" . "old.png"))))))
+    (slack-emoji-upsert-user-emoji
+     (cons ":custom:" '(("image" . "new.png"))))
+    (should (equal (list (cons ":custom:" '(("image" . "new.png"))))
+                   emojify-user-emojis))))
+
 (provide 'slack-emoji-test)
 ;;; slack-emoji-test.el ends here
