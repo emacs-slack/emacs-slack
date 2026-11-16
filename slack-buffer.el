@@ -66,6 +66,13 @@
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "RET") #'slack-load-more-message)
     map))
+
+(defun slack--register-yank-media-handlers ()
+  "Register clipboard media handlers for Slack buffers."
+  (when (fboundp 'yank-media-handler)
+    (yank-media-handler "image/.*" #'slack--yank-media-handler)
+    (yank-media-handler 'text/uri-list #'slack--yank-media-uri-handler)))
+
 ;; to have working link buttons
 ;; https://github.com/emacs-slack/emacs-slack/issues/547#issuecomment-1542119271
 (advice-add 'lui-buttonize-urls :before-until (lambda () (derived-mode-p 'slack-mode)))
@@ -77,9 +84,7 @@
   (setq lui-input-function 'slack-message--send)
   ;; don't adjust indentation of messages
   (setq-local lui-fill-type nil)
-  (when (fboundp 'yank-media-handler)
-    (yank-media-handler "image/.*" #'slack--yank-media-handler)
-    (yank-media-handler 'text/uri-list #'slack--yank-media-uri-handler)))
+  (slack--register-yank-media-handlers))
 
 (define-derived-mode slack-info-mode lui-mode "Slack Info"
   ""
@@ -137,7 +142,8 @@ placeholder so the buffer does not wait forever."
   (add-hook 'lui-pre-output-hook 'slack-handle-lazy-conversation-name nil t)
   (lui-set-prompt " ")
   ;; don't adjust indentation of messages
-  (setq-local lui-fill-type nil))
+  (setq-local lui-fill-type nil)
+  (slack--register-yank-media-handlers))
 
 (defclass slack-buffer ()
   ((team-id :initarg :team-id :type string)
