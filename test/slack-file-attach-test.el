@@ -1,7 +1,9 @@
 ;;; slack-file-attach-test.el --- tests for draft file attachment -*- lexical-binding: t; -*-
 
 (require 'ert)
+(require 'yank-media)
 (require 'slack-message-buffer)
+(require 'slack-thread-message-buffer)
 (require 'slack-message-attachment-preview-buffer)
 (require 'slack-channel)
 (require 'slack-team)
@@ -189,6 +191,16 @@
         ;; cleanup
         (when (file-exists-p tmp-path)
           (delete-file tmp-path))))))
+
+(ert-deftest slack-test-thread-buffer-registers-yank-media-handlers ()
+  "A thread buffer registers the handlers required by `yank-media'."
+  (with-temp-buffer
+    (slack-thread-message-buffer-mode)
+    (should (eq #'slack--yank-media-handler
+                (alist-get "image/.*" yank-media--registered-handlers
+                           nil nil #'equal)))
+    (should (eq #'slack--yank-media-uri-handler
+                (alist-get 'text/uri-list yank-media--registered-handlers)))))
 
 (ert-deftest slack-test-yank-media-extension ()
   "`slack--yank-media-extension' maps MIME types to file extensions."
