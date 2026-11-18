@@ -102,6 +102,14 @@ Idempotent."
     (setq slack-emoji-job-runner nil)
     (setq slack-emoji-all nil)))
 
+(defun slack-emoji-upsert-user-emoji (emoji)
+  "Replace the cached user emoji with the same shortcode as EMOJI."
+  (setq emojify-user-emojis
+        (cons emoji
+              (cl-remove (car emoji) emojify-user-emojis
+                         :test #'string=
+                         :key #'car))))
+
 (defun slack-download-emoji (team after-success)
   "Download TEAM emojis and run AFTER-SUCCESS on the downloaded paths.
 This runs asynchronously, splitting the emojis in batches of `slack-emoji-job-batch-size,' every `slack-emoji-job-interval' seconds."
@@ -127,9 +135,7 @@ This runs asynchronously, splitting the emojis in batches of `slack-emoji-job-ba
               raw-url)))
          (push-new-emoji (emoji)
            (puthash (car emoji) t (oref team emoji-master))
-           (cl-pushnew emoji emojify-user-emojis
-                       :test #'string=
-                       :key #'car))
+           (slack-emoji-upsert-user-emoji emoji))
          (on-success
            (&key data &allow-other-keys)
            (slack-request-handle-error

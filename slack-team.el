@@ -30,6 +30,7 @@
 (require 's)
 
 (declare-function emojify-create-emojify-emojis "emojify")
+(defvar emojify-user-emojis)
 
 (defvar slack-current-team nil)
 (defvar slack-completing-read-function)
@@ -250,9 +251,20 @@ Populated by `slack-vip-list-update', the `users.priority.add'/
         (setq message-id 1)
       (cl-incf message-id))))
 
+(defun slack-team--emoji-downloads-ready-p (paths)
+  "Return non-nil when PATHS exist and their callbacks have run.
+The curl process creates its output file before invoking its success callback,
+so checking files alone can rebuild emojify before the user emoji alist is
+current."
+  (let ((images (make-hash-table :test #'equal)))
+    (dolist (emoji emojify-user-emojis)
+      (let ((image (cdr (assoc "image" (cdr emoji)))))
+        (when image (puthash image t images))))
+    (and (cl-every #'file-exists-p paths)
+         (cl-every (lambda (path) (gethash path images)) paths))))
+
 (defun slack-team-watch-emoji-download-complete (team paths)
-  (if (eq (length (cl-remove-if #'identity (mapcar #'file-exists-p paths)))
-          0)
+  (if (slack-team--emoji-downloads-ready-p paths)
       (when (timerp (oref team emoji-download-watch-timer))
         (cancel-timer (oref team emoji-download-watch-timer))
         (oset team emoji-download-watch-timer nil)
