@@ -150,7 +150,19 @@
                               (slack-message-sender-name message team))
                :category 'slack))))
 
-(cl-defmethod slack-event-notify ((_this slack-message-replied-event) _message _team))
+(defun slack-message-event-notify-reply (event team)
+  "Notify about the reply carried by EVENT, never its thread root."
+  (let* ((payload (oref event payload))
+         (reply-payload (plist-get payload :message))
+         (channel (plist-get payload :channel))
+         (room (slack-room-find channel team))
+         (reply (and room (slack-message-create reply-payload team room))))
+    (when (and reply
+               (not (slack-message-minep reply team)))
+      (slack-message-notify reply room team))))
+
+(cl-defmethod slack-event-notify ((this slack-message-replied-event) _message team)
+  (slack-message-event-notify-reply this team))
 
 (cl-defmethod slack-message-event-update-modeline ((_this slack-message-event) message team)
   (slack-if-let* ((room (slack-room-find message team)))
@@ -185,8 +197,44 @@
 (cl-defmethod slack-message-event-update-modeline ((_this slack-message-deleted-event) _message _team)
   (slack-update-modeline))
 
+(defun slack-message-event-ai-complete-p (event)
+  "Return non-nil when EVENT carries a completed Slack AI response."
+  (let* ((payload (oref event payload))
+         (message (plist-get payload :message))
+         (context (plist-get message :ai_context)))
+    (equal "complete" (plist-get context :result_status))))
+
+(defvar slack-message-event-notified-ai-responses
+  (make-hash-table :test #'equal)
+  "AI response identities already sent as notifications this session.")
+
+(defun slack-message-event-ai-notification-key (message team)
+  "Return the stable identity for MESSAGE's AI response in TEAM."
+  (list (and (slot-boundp team 'id) (oref team id))
+        (oref message channel)
+        (slack-ts message)))
+
+(cl-defmethod slack-event-notify
+    ((this slack-message-changed-event) message team)
+  ;; Slackbot streams one AI reply through repeated message_changed events.
+  ;; Notify only when the final response is available, not for each partial
+  ;; update (the initial `ai' event already announces "Thinking...").
+  (when (slack-message-event-ai-complete-p this)
+    (slack-if-let* ((room (slack-room-find message team)))
+        (let ((key (slack-message-event-ai-notification-key message team)))
+          (unless (gethash key slack-message-event-notified-ai-responses)
+            (puthash key t slack-message-event-notified-ai-responses)
+            (slack-message-notify message room team))))))
+
 (cl-defmethod slack-event-update-ui ((this slack-message-event) message team)
-  (cl-call-next-method)
+  ;; Some Slack websocket deliveries expose `message_replied' as a generic
+  ;; message event even though their primary message is the thread root. Do
+  ;; not let generic dispatch notify that root.
+  (slack-event-update-buffer this message team)
+  (if (equal "message_replied"
+             (plist-get (oref this payload) :subtype))
+      (slack-message-event-notify-reply this team)
+    (slack-event-notify this message team))
   (slack-message-event-update-modeline this message team))
 
 (cl-defmethod slack-message-event-retrieve-users ((this slack-bot-message-event) _message team cb)
