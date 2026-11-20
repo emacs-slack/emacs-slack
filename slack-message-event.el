@@ -150,16 +150,24 @@
                               (slack-message-sender-name message team))
                :category 'slack))))
 
-(defun slack-message-event-notify-reply (event team)
-  "Notify about the reply carried by EVENT, never its thread root."
+(defun slack-message-event-reply (event team)
+  "Return the reply carried by EVENT, rather than its thread root."
   (let* ((payload (oref event payload))
          (reply-payload (plist-get payload :message))
          (channel (plist-get payload :channel))
          (room (slack-room-find channel team))
-         (reply (and room (slack-message-create reply-payload team room))))
-    (when (and reply
-               (not (slack-message-minep reply team)))
-      (slack-message-notify reply room team))))
+         (reply (and room
+                     (slack-message-create reply-payload team room))))
+    reply))
+
+(defun slack-message-event-notify-reply (event team)
+  "Notify about the reply carried by EVENT, never its thread root."
+  (when-let ((reply (slack-message-event-reply event team)))
+    (unless (slack-message-minep reply team)
+      (slack-message-notify
+       reply
+       (slack-room-find (oref reply channel) team)
+       team))))
 
 (cl-defmethod slack-event-notify ((this slack-message-replied-event) _message team)
   (slack-message-event-notify-reply this team))
@@ -191,6 +199,11 @@
                      (next-count (+ count 1)))
                 (slack-room-set-mention-count room next-count team)))))
         (slack-update-modeline))))
+
+(cl-defmethod slack-message-event-update-modeline
+    ((this slack-message-replied-event) parent team)
+  (cl-call-next-method (or (slack-message-event-reply this team) parent)
+                       team))
 
 (cl-defmethod slack-message-event-update-modeline ((_this slack-message-changed-event) _message _team)
   (slack-update-modeline))
@@ -231,11 +244,15 @@
   ;; message event even though their primary message is the thread root. Do
   ;; not let generic dispatch notify that root.
   (slack-event-update-buffer this message team)
-  (if (equal "message_replied"
-             (plist-get (oref this payload) :subtype))
-      (slack-message-event-notify-reply this team)
-    (slack-event-notify this message team))
-  (slack-message-event-update-modeline this message team))
+  (let ((reply-event-p (equal "message_replied"
+                             (plist-get (oref this payload) :subtype)))
+        (reply (and (equal "message_replied"
+                           (plist-get (oref this payload) :subtype))
+                    (slack-message-event-reply this team))))
+    (if reply-event-p
+        (slack-message-event-notify-reply this team)
+      (slack-event-notify this message team))
+    (slack-message-event-update-modeline this (or reply message) team)))
 
 (cl-defmethod slack-message-event-retrieve-users ((this slack-bot-message-event) _message team cb)
   (let* ((payload (oref this payload))
