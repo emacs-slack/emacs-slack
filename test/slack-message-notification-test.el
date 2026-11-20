@@ -75,8 +75,48 @@
         (slack-event-update-ui event nil team))
       (should-not parent-notified)
       (should notified)
-      (should (equal reply-ts (slack-ts notified)))
-      (should (equal thread-ts (slack-thread-ts notified))))))
+       (should (equal reply-ts (slack-ts notified)))
+       (should (equal thread-ts (slack-thread-ts notified))))))
+
+(ert-deftest slack-test-message-replied-modeline-uses-reply ()
+  "A message_replied event updates unread state for the nested reply."
+  (slack-test-setup
+    (let* ((reply-ts "1700000000.000002")
+           (thread-ts "1700000000.000001")
+           (event (slack-create-message-event
+                   (list :type "message"
+                         :subtype "message_replied"
+                         :channel (oref channel id)
+                         :message (list :type "message"
+                                        :ts reply-ts
+                                        :thread_ts thread-ts
+                                        :user "U11111"
+                                        :text "A reply"))))
+           visible-message)
+      (cl-letf (((symbol-function 'slack-room-find)
+                 (lambda (&rest _args) channel))
+                ((symbol-function 'slack-message-ephemeral-p)
+                 (lambda (&rest _args) nil))
+                ((symbol-function 'slack-message-visible-p)
+                 (lambda (message _team)
+                   (setq visible-message message)
+                   t))
+                ((symbol-function 'slack-buffer-find)
+                 (lambda (&rest _args) nil))
+                ((symbol-function 'slack-message-mentioned-p)
+                 (lambda (&rest _args) nil))
+                ((symbol-function 'slack-mpim-p)
+                 (lambda (&rest _args) nil))
+                ((symbol-function 'slack-im-p)
+                 (lambda (&rest _args) nil))
+                ((symbol-function 'slack-room-set-has-unreads)
+                 #'ignore)
+                ((symbol-function 'slack-update-modeline)
+                 #'ignore))
+        (slack-message-event-update-modeline event nil team))
+      (should visible-message)
+      (should (equal reply-ts (slack-ts visible-message)))
+      (should (equal thread-ts (slack-thread-ts visible-message))))))
 
 (ert-deftest slack-test-message-replied-does-not-notify-own-reply ()
   "A reply authored by the current user never produces an alert."

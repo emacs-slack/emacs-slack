@@ -202,7 +202,7 @@
 
 (cl-defmethod slack-message-event-update-modeline
     ((this slack-message-replied-event) parent team)
-  (cl-call-next-method (or (slack-message-event-reply this team) parent)
+  (cl-call-next-method this (or (slack-message-event-reply this team) parent)
                        team))
 
 (cl-defmethod slack-message-event-update-modeline ((_this slack-message-changed-event) _message _team)
