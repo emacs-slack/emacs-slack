@@ -85,7 +85,8 @@
                                             (slack-get-ts)))))
 
 (cl-defmethod slack-buffer-reaction-help-text ((this slack-room-buffer) reaction)
-  (slack-reaction-help-text reaction (slack-buffer-team this)))
+  (slack-reaction-help-text reaction (slack-buffer-team this)
+                            #'(lambda (text) (message text))))
 
 (cl-defmethod slack-buffer-delete-message ((this slack-room-buffer) ts)
   (slack-if-let* ((team (slack-buffer-team this))
