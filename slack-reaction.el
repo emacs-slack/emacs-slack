@@ -30,8 +30,7 @@
 (defclass slack-reaction ()
   ((name :initarg :name :type string)
    (count :initarg :count :type integer)
-   (users :initarg :users :initform ())
-   (user-loading :type boolean :initform nil)))
+   (users :initarg :users :initform ())))
 
 (cl-defmethod slack-reaction-join ((r slack-reaction) other)
   (if (string= (oref r name) (oref other name))
@@ -46,38 +45,30 @@
 (cl-defmethod slack-reaction-equalp ((r slack-reaction) other)
   (string= (oref r name) (oref other name)))
 
-(cl-defmethod slack-reaction-fetch-users ((this slack-reaction) team cb)
-  (cl-labels
-      ((collect-users (user-ids)
-                      (cl-remove-if #'null
-                                    (mapcar #'(lambda (id) (slack-user--find id team))
-                                            user-ids))))
-    (let* ((users (collect-users (oref this users)))
-           (user-loaded-p (<= (length (oref this users))
-                              (length users))))
-      (if user-loaded-p (funcall cb users)
-        (progn
-          (unless (oref this user-loading)
-            (oset this user-loading t)
-            (slack-users-info-request (slack-team-missing-user-ids  team (oref this users))
-                                      team
-                                      :after-success
-                                      #'(lambda ()
-                                          (oset this user-loading nil)
-                                          (funcall cb (collect-users (oref this users)))))))))))
-
 (cl-defmethod slack-reaction-user-reacted-p ((this slack-reaction) user-id)
   (member user-id (oref this users)))
 
-(cl-defmethod slack-reaction-help-text ((r slack-reaction) team cb)
-  (slack-reaction-fetch-users r team #'(lambda (users)
-                                         (let ((user-names (mapcar #'(lambda (user)
-                                                                       (slack-user--name user team))
-                                                                   users)))
-                                           (funcall cb
-                                                    (format "%s reacted with :%s:"
-                                                            (mapconcat #'identity user-names ", ")
-                                                            (oref r name)))))))
+(cl-defmethod slack-reaction-help-text ((r slack-reaction) team &optional callback)
+  "Return help text for R, also passing it to CALLBACK when given.
+User names come from the team cache only: producing a help text must
+not fire network requests.  When some of the reaction's users are not
+loaded yet, the text asks the user to wait a few seconds — other
+lookups (message senders, for instance) fill the cache as they
+complete — and to run `slack-user-list-update' to load the workspace
+users if the names still do not show."
+  (if (slack-team-missing-user-ids team (oref r users))
+      (let ((text "Some users of this reaction are not loaded yet.
+Wait a few seconds and try again; if the names still do not show, run
+`M-x slack-user-list-update' to load the workspace users."))
+        (when callback (funcall callback text))
+        text)
+    (let* ((user-names (mapcar #'(lambda (id) (slack-user-name id team))
+                               (oref r users)))
+           (text (format "%s reacted with :%s:"
+                         (mapconcat #'identity user-names ", ")
+                         (oref r name))))
+      (when callback (funcall callback text))
+      text)))
 
 (defun slack-reaction--find (reactions reaction)
   (cl-find-if #'(lambda (e) (slack-reaction-equalp e reaction))

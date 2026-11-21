@@ -143,6 +143,16 @@ All notable changes to this project will be documented in this file.
 
 ** Changed
 
+- Showing who reacted no longer fires network requests.
+  ~slack-reaction-help-text~ used to look the reaction's users up one
+  by one through ~slack-user--find~, whose cache misses each trigger a
+  =users.info= request whose completion redraws every visible buffer
+  (that redraw storm also made the cursor jump while scrolling).
+  Reaction help text is now built from the team user cache only; when
+  some users are not loaded yet, it says so and suggests waiting a few
+  seconds — other lookups fill the cache as they complete — or running
+  ~slack-user-list-update~ to load the workspace users.  The unused
+  ~slack-reaction-fetch-users~ method is gone.
 - Typing =@= or =#= in a room, thread or edit buffer opens the mention
   picker by default; users no longer need to bind the keys themselves.
   The picker only opens at the start of a word: inside a word (=c#=, an
