@@ -352,16 +352,28 @@ Needed when the room gained a whole new block of history, for instance after
 jumping to an old message: the blocks and holes change everywhere, so patching
 the buffer in place would be more work than starting over."
   (with-current-buffer (slack-buffer-buffer this)
-    (slack-buffer-widen
-     (let ((inhibit-read-only t))
-       (slack-buffer-delete-overlay this)
-       ;; everything before the output marker is drawn history; the prompt and
-       ;; whatever the user is typing live after it and must survive
-       (delete-region (point-min) (marker-position lui-output-marker))
-       (oset this oldest nil)
-       (oset this latest nil)
-       (slack-buffer-render-history this)
-       (slack-buffer-update-marker-overlay this)))))
+    ;; deleting the drawn history drags point down to its start, so
+    ;; remember where the cursor was and go back there afterwards;
+    ;; restore outside `slack-buffer-widen', which is a `save-excursion'
+    (let ((current-ts (slack-get-ts))
+          (prompt-offset (when (>= (point) (marker-position lui-output-marker))
+                           (- (point) (marker-position lui-output-marker))))
+          (cur-point (point)))
+      (slack-buffer-widen
+       (let ((inhibit-read-only t))
+         (slack-buffer-delete-overlay this)
+         ;; everything before the output marker is drawn history; the prompt
+         ;; and whatever the user is typing live after it and must survive
+         (delete-region (point-min) (marker-position lui-output-marker))
+         (oset this oldest nil)
+         (oset this latest nil)
+         (slack-buffer-render-history this)
+         (slack-buffer-update-marker-overlay this)))
+      (cond
+       (current-ts (slack-buffer-goto current-ts))
+       (prompt-offset (goto-char (+ (marker-position lui-output-marker)
+                                    prompt-offset)))
+       (t (goto-char (min cur-point (point-max))))))))
 
 (cl-defmethod slack-buffer-update ((this slack-message-buffer) message &key replace)
   (let ((team (slack-buffer-team this))

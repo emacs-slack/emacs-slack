@@ -7,6 +7,13 @@ All notable changes to this project will be documented in this file.
 
 ** Fixed
 
+- Redrawing a visible message buffer no longer moves point to the
+  beginning of the buffer.  ~slack-buffer-redraw~ deletes the drawn
+  history and renders it again, which dragged point to =point-min=;
+  background redraws (a lazy user fetch completing while you scroll,
+  for instance) made the cursor jump to the top.  It now restores the
+  message under the cursor, or the cursor's position relative to the
+  prompt when it was in the input area.
 - Profile-image fallbacks now honor the requested avatar size when SVG support
   is unavailable, instead of rendering the original full-size image.
 - Mentions are detected using the rendered full display name and raw Slack user
