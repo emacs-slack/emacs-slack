@@ -192,7 +192,55 @@
       (cl-letf (((symbol-function 'slack-message-notify)
                  (lambda (&rest _args)
                    (setq notified t))))
-        (slack-event-notify event message team))
+       (slack-event-notify event message team))
       (should-not notified))))
+
+(ert-deftest slack-test-message-event-fetches-missing-room ()
+  "A message in a newly created conversation loads its room before updating UI."
+  (let* ((team (make-instance 'slack-team :id "T0" :self-id "U0"))
+         (message (make-instance 'slack-message
+                                 :channel "G999"
+                                 :ts "1700000000.000001"))
+         (event (make-instance 'slack-message-event
+                               :type "message"
+                               :payload '(:type "message"
+                                          :channel "G999")))
+         (room (make-instance 'slack-group :id "G999" :is_mpim t))
+         (fetched-channel nil)
+         (saved nil)
+         (updated nil))
+    (cl-letf (((symbol-function 'slack-event-find-message)
+               (lambda (_event _team) message))
+              ((symbol-function 'slack-room-find-or-fetch)
+               (lambda (channel _team callback)
+                 (setq fetched-channel channel)
+                 (funcall callback room)))
+              ((symbol-function 'slack-event-save-message)
+               (lambda (_event actual-message _team)
+                 (setq saved actual-message)))
+              ((symbol-function 'slack-message-event-retrieve-users)
+               (lambda (_event _message _team callback)
+                 (funcall callback)))
+              ((symbol-function 'slack-event-update-ui)
+               (lambda (_event actual-message _team)
+                 (setq updated actual-message))))
+      (slack-event-update event team))
+    (should (equal "G999" fetched-channel))
+    (should (eq message saved))
+    (should (eq message updated))))
+
+(ert-deftest slack-test-new-mpim-gets-an-unread-count-entry ()
+  "A first message can mark an MPIM unread before the next counts refresh."
+  (let* ((counts (make-instance 'slack-counts
+                                :threads (make-instance 'slack-counts-threads)))
+         (team (make-instance 'slack-team :id "T0" :self-id "U0"))
+         (room (make-instance 'slack-group :id "G999" :is_mpim t))
+         (message (make-instance 'slack-message :ts "1700000000.000001")))
+    (oset team counts counts)
+    (slack-message-event--ensure-mpim-count message room team)
+    (slack-room-set-has-unreads room t team)
+    (let ((count (slack-counts-find (oref counts mpims) "G999")))
+      (should count)
+      (should (oref count has-unreads)))))
 
 ;;; slack-message-notification-test.el ends here

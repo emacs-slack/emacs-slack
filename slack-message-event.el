@@ -29,6 +29,8 @@
 (require 'slack-event)
 (require 'slack-create-message)
 (require 'slack-message-buffer)
+(require 'slack-conversations)
+(require 'slack-counts)
 
 (defvar slack-alert-icon)
 
@@ -186,8 +188,10 @@
             ;; self and the buffer is not currently focused. For other
             ;; room types, preserve existing behavior.
             (if (slack-mpim-p room)
-                (when (and not-self (not focused))
-                  (slack-room-set-has-unreads room t team))
+                (progn
+                  (slack-message-event--ensure-mpim-count message room team)
+                  (when (and not-self (not focused))
+                    (slack-room-set-has-unreads room t team)))
               (slack-room-set-has-unreads room t team))
 
             ;; Increment mention count if explicitly mentioned, or for
@@ -270,13 +274,29 @@
                                  :after-success cb)
       (funcall cb))))
 
+(defun slack-message-event--ensure-mpim-count (message room team)
+  "Add a local unread-count entry for a newly discovered MPIM."
+  (when (and (slack-mpim-p room)
+             (oref team counts))
+    (let ((counts (oref team counts)))
+      (unless (slack-counts-find (oref counts mpims) (oref room id))
+        (oset counts mpims
+              (cons (make-instance 'slack-counts-conversation
+                                   :id (oref room id)
+                                   :latest (slack-ts message))
+                    (oref counts mpims)))))))
+
 (cl-defmethod slack-event-update ((this slack-message-event) team)
   (let* ((message (slack-event-find-message this team)))
     (when message
-      (slack-event-save-message this message team)
-      (cl-labels
-          ((update () (slack-event-update-ui this message team)))
-        (slack-message-event-retrieve-users this message team #'update)))))
+      (slack-room-find-or-fetch
+       (oref message channel)
+       team
+       (lambda (_room)
+         (slack-event-save-message this message team)
+         (cl-labels
+             ((update () (slack-event-update-ui this message team)))
+           (slack-message-event-retrieve-users this message team #'update)))))))
 
 (provide 'slack-message-event)
 ;;; slack-message-event.el ends here
