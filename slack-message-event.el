@@ -156,7 +156,12 @@
          (reply-payload (plist-get payload :message))
          (channel (plist-get payload :channel))
          (room (slack-room-find channel team))
+         (reply-ts (plist-get reply-payload :ts))
+         (thread-ts (plist-get reply-payload :thread_ts))
          (reply (and room
+                     reply-ts
+                     thread-ts
+                     (not (equal reply-ts thread-ts))
                      (slack-message-create reply-payload team room))))
     reply))
 
