@@ -180,16 +180,21 @@ has no message part), so it opens in the browser."
               ((symbol-function 'slack-room-hidden-p) (lambda (_) nil))
               ((symbol-function 'slack-team-name) (lambda (_) "myteam"))
               ((symbol-function 'slack-room-name) (lambda (&rest _) "chan")))
-      ;; setq/makunbound instead of let: the variable is special but
-      ;; has no default value in this process, and a plain `let' here
-      ;; can be compiled to a lexical binding that the interpreted
-      ;; `slack-org-complete-link' cannot see.
-      (unwind-protect
-          (progn
-            (setq slack-completing-read-function
-                  (lambda (&rest _) "myteam - chan"))
-            (should (equal "emacs-slack:https://myteam.slack.com/archives/C1/"
-                           (slack-org-complete-link))))
-        (makunbound 'slack-completing-read-function)))))
+       ;; setq instead of let: the variable is special, and a plain `let'
+       ;; here can be compiled to a lexical binding that the interpreted
+       ;; `slack-org-complete-link' cannot see. Restore the caller's binding
+       ;; because this test may run in a persistent Emacs process.
+       (let ((was-bound (boundp 'slack-completing-read-function))
+             (old-value (and (boundp 'slack-completing-read-function)
+                             slack-completing-read-function)))
+         (unwind-protect
+             (progn
+               (setq slack-completing-read-function
+                     (lambda (&rest _) "myteam - chan"))
+               (should (equal "emacs-slack:https://myteam.slack.com/archives/C1/"
+                              (slack-org-complete-link))))
+           (if was-bound
+               (setq slack-completing-read-function old-value)
+             (makunbound 'slack-completing-read-function)))))))
 
 ;;; slack-org-link-test.el ends here
