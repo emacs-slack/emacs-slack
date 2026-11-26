@@ -8,6 +8,20 @@
 (require 'ert)
 (require 'slack-message)
 (require 'slack-room)
+(require 'slack-attachment)
+
+(ert-deftest slack-message-test-attachment-blocks-are-rendered-once ()
+  "Block Kit content from an attachment is not also rendered as message body."
+  (slack-test-setup
+    (let ((message (make-instance 'slack-message
+                                  :text "fallback"
+                                  :attachments
+                                  (list (make-instance
+                                         'slack-attachment
+                                         :blocks '(not-rendered-here))))))
+      (should (equal "fallback"
+                     (substring-no-properties
+                      (slack-message-body message team)))))))
 
 (ert-deftest slack-message-test-get-or-fetch-async-history-hit ()
   "A message visible in channel history is delivered from the history

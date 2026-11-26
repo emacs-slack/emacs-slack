@@ -127,7 +127,7 @@
               desc))))
 
 (cl-defmethod slack-command-run ((command slack-command) team channel
-                                 &key (text nil))
+                                 &key (text nil) (thread-ts nil))
   (let ((disp "")
         (client-token (slack-team-client-token team))
         (command (oref command name)))
@@ -147,6 +147,7 @@
                                                            :id (plist-get user :id)
                                                            :type "message"
                                                            :channel channel
+                                                           :thread_ts thread-ts
                                                            :ts (number-to-string (time-to-seconds))))
                                             (event (slack-create-message-event payload)))
                                 (slack-event-update event team)
@@ -159,6 +160,8 @@
                         (cons "client_token" client-token)
                         (cons "command" command)
                         (cons "channel" channel)
+                        (when thread-ts
+                          (cons "thread_ts" thread-ts))
                         (when text
                           (cons "text" text)))
           :success #'on-success)))))))

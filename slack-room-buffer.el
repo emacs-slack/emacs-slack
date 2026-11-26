@@ -654,20 +654,36 @@ id.  Other actions keep the message-level service id."
                   (ts (slack-get-ts))
                   (room (slack-buffer-room this))
                   (team (slack-buffer-team this))
-                  (message (slack-room-find-message room ts))
                   (action (get-text-property cur-point
-                                             'slack-action-payload))
-                  (button (slack-block-find-action-from-payload action message)))
-
-      (when (slack-block-handle-confirm button)
-        (slack-if-let* ((url (oref button url)))
-            (slack-open-url-or-browse-url url)
-          (let ((container (slack-buffer-block-action-container this message))
-                (service-id (slack-block-action-service-id action message)))
-            (slack-block-action-execute service-id
-                                        (list action)
-                                        container
-                                        team))))))
+                                             'slack-action-payload)))
+      (let* ((message (slack-room-find-message room ts))
+             (button (and message
+                          (slack-block-find-action-from-payload action message))))
+        (cond
+         (button
+          (when (slack-block-handle-confirm button)
+            (slack-if-let* ((url (oref button url)))
+                (slack-open-url-or-browse-url url)
+              (let ((container (slack-buffer-block-action-container this message))
+                    (service-id (slack-block-action-service-id action message)))
+                (slack-block-action-execute service-id
+                                            (list action)
+                                            container
+                                            team)))))
+         ;; Giphy's ephemeral preview is not added to the room cache, but its
+         ;; action payload still contains everything needed by blocks.actions.
+         ((and (null message)
+               (string-prefix-p "giphy:"
+                                (or (cdr-safe (assoc-string "block_id" action))
+                                    "")))
+          (slack-block-action-execute
+           "B01"
+           (list action)
+           (list (cons "type" "message")
+                 (cons "message_ts" ts)
+                 (cons "channel_id" (oref room id))
+                 (cons "is_ephemeral" t))
+           team))))))
 
 (cl-defmethod slack-buffer-execute-conversation-select-block-action ((this slack-room-buffer))
   (slack-if-let* ((cur-point (point))
