@@ -259,9 +259,19 @@ current."
   (let ((images (make-hash-table :test #'equal)))
     (dolist (emoji emojify-user-emojis)
       (let ((image (cdr (assoc "image" (cdr emoji)))))
-        (when image (puthash image t images))))
+          (when image (puthash image t images))))
     (and (cl-every #'file-exists-p paths)
          (cl-every (lambda (path) (gethash path images)) paths))))
+
+(defun slack-team-redraw-visible-emoji-buffers (team)
+  "Redraw visible TEAM message buffers after emoji images become ready."
+  (when (and (fboundp 'slack-buffer-buffer)
+             (fboundp 'slack-buffer-redraw))
+    (dolist (buffer-object
+             (hash-table-values (slot-value team 'slack-message-buffer)))
+      (let ((buffer (slack-buffer-buffer buffer-object)))
+        (when (get-buffer-window buffer t)
+          (slack-buffer-redraw buffer-object))))))
 
 (defun slack-team-watch-emoji-download-complete (team paths)
   (if (slack-team--emoji-downloads-ready-p paths)
@@ -274,6 +284,7 @@ current."
         ;; emojify creates a regex larger than emacs can handle
         ;; but it works fine with its simple (github) style regex
         (when (> (length paths) 1500) (setq emojify--user-emojis-regexp nil))
+        (slack-team-redraw-visible-emoji-buffers team)
         )))
 
 (cl-defmethod slack-team-token ((this slack-team))
