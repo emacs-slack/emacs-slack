@@ -33,11 +33,22 @@
 (defun slack-find-bot (id team)
   (gethash id (oref team bots)))
 
+(defun slack-bot-info-request-error (request-name error)
+  "Report ERROR for REQUEST-NAME unless the bot no longer exists.
+
+Missing bot metadata is expected when history contains a deleted bot or a
+bot from a shared workspace that the current token cannot inspect."
+  (unless (member error '("bot_not_found" "bots_not_found"))
+    (message "Failed to request %s: %s" request-name error)))
+
 (defun slack-bot-info-request (bot-id team &optional after-success)
   (cl-labels
       ((on-success (&key data &allow-other-keys)
                    (slack-request-handle-error
-                    (data "slack-bot-info-request")
+                    (data "slack-bot-info-request"
+                          (lambda (error)
+                            (slack-bot-info-request-error
+                             "slack-bot-info-request" error)))
                     (let ((bot (plist-get data :bot)))
                       (slack-team-set-bots team (list bot))))
                    (if after-success
@@ -53,7 +64,10 @@
   (cl-labels
       ((success (&key data &allow-other-keys)
                 (slack-request-handle-error
-                 (data "slack-bots-info-request")
+                 (data "slack-bots-info-request"
+                       (lambda (error)
+                         (slack-bot-info-request-error
+                          "slack-bots-info-request" error)))
                  (let ((bots (plist-get data :bots)))
                    (slack-team-set-bots team bots)))
                 (if after-success
