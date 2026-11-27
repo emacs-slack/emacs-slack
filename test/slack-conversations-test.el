@@ -12,7 +12,9 @@
          (selections (list "Alice" "Bob" "Finish inviting"))
          (params nil)
          (slack-completing-read-function
-           (lambda (_prompt candidates &rest _args)
+           (lambda (prompt candidates &rest _args)
+             (should (equal "Select User (choose Finish inviting to stop): "
+                            prompt))
              (should (equal "Finish inviting" (caar candidates)))
              (pop selections))))
     (cl-letf (((symbol-function 'slack-user-names)

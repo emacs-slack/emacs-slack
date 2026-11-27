@@ -51,14 +51,23 @@ an `ivy'- or `helm'-style function to use that completion UI.")
       'if-let*
     'if-let))
 
-(cl-defmacro slack-select-from-list ((alist prompt &key initial) &body body)
-  "Bind candidates from selected."
+(cl-defmacro slack-select-from-list ((alist prompt &key initial finish) &body body)
+  "Bind candidates from selected.
+
+When FINISH is non-nil, add it as a selectable choice that returns nil.
+This is useful for repeated selection flows that need an explicit way to
+stop without treating minibuffer cancellation as normal completion."
   (declare (indent 2) (debug t))
-  (let ((key (cl-gensym)))
-    `(let* ((,key (let ((completion-ignore-case t))
+  (let ((key (cl-gensym))
+        (choices (cl-gensym)))
+    `(let* ((,choices (if ,finish
+                          (cons (cons ,finish nil) ,alist)
+                        ,alist))
+            (,key (let ((completion-ignore-case t))
                     (funcall slack-completing-read-function (format "%s" ,prompt)
-                             ,alist nil t ,initial)))
-            (selected (cdr (cl-assoc ,key ,alist :test #'string=))))
+                             ,choices nil t ,initial)))
+            (selected (unless (and ,finish (string= ,key ,finish))
+                        (cdr (cl-assoc ,key ,choices :test #'string=)))))
        ,@body
        selected)))
 

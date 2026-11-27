@@ -158,22 +158,14 @@
                       users))
           (filter-selected (user-names)
                            (cl-remove-if #'already-selected-p
-                                         user-names))
-          (select-user (candidates)
-                       (let* ((finish-name "Finish inviting")
-                              (choices (cons (cons finish-name nil)
-                                             candidates))
-                              (selected-name
-                               (let ((completion-ignore-case t))
-                                 (funcall slack-completing-read-function
-                                          "Select User (choose Finish inviting to stop): "
-                                          choices nil t))))
-                         (unless (string= selected-name finish-name)
-                           (cdr (cl-assoc selected-name choices :test #'string=))))))
+                                         user-names)))
        (cl-loop for i from 1 upto 30
                 as candidates = (filter-selected user-names)
                 while candidates
-                as selected = (select-user candidates)
+                as selected = (slack-select-from-list
+                                  (candidates
+                                   "Select User (choose Finish inviting to stop): "
+                                   :finish "Finish inviting"))
                 while selected
                 do (push (plist-get selected :id) users)))
     (setq users (mapconcat #'identity users ","))
