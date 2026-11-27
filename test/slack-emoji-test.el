@@ -243,6 +243,36 @@ from the emojis emojify already knows, without network."
             (slack-team-watch-emoji-download-complete team (list path))
             (should called)
             (should-not (timerp (oref team emoji-download-watch-timer)))))
+       (delete-file path))))
+
+(ert-deftest slack-emoji-test/download-watch-redraws-visible-buffers ()
+  "Emoji completion redraws visible message and thread buffers."
+  (let* ((path (make-temp-file "slack-emoji-test"))
+         (team (make-instance 'slack-team :name "test-team" :id "T99999"))
+         (emojify-user-emojis
+          (list (cons ":custom:"
+                      (list (cons "image" path)
+                            (cons "name" "custom")
+                            (cons "style" "github")))))
+         (redrawn nil))
+    (unwind-protect
+        (progn
+          (oset team emoji-download-watch-timer
+                (run-at-time 60 nil #'ignore))
+          (let ((message-buffer (make-hash-table :test #'equal)))
+            (puthash "message" 'message-buffer message-buffer)
+            (oset team slack-message-buffer message-buffer)
+            (cl-letf (((symbol-function 'emojify-create-emojify-emojis)
+                       (lambda (&optional _force) nil))
+                      ((symbol-function 'slack-buffer-buffer)
+                       (lambda (buffer-object) buffer-object))
+                      ((symbol-function 'get-buffer-window)
+                       (lambda (_buffer &optional _frame) t))
+                      ((symbol-function 'slack-buffer-redraw)
+                       (lambda (buffer-object)
+                         (push buffer-object redrawn))))
+              (slack-team-watch-emoji-download-complete team (list path)))
+            (should (equal '(message-buffer) redrawn))))
       (delete-file path))))
 
 (provide 'slack-emoji-test)
