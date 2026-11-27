@@ -461,18 +461,26 @@
                      (unless (slack-string-blankp h)
                        (concat pad h))))
            (pretext (and pretext (concat pad pretext)))
+           (blocks-text (when (and blocks (not (oref team disable-block-format)))
+                          (mapconcat #'(lambda (bl)
+                                         (slack-block-to-string bl (list :team team)))
+                                     blocks
+                                     "\n\n")))
            (blocks-body (when (and blocks (not (oref team disable-block-format)))
                           (mapconcat #'(lambda (e) (concat pad e))
                                      (split-string
-                                      (mapconcat #'(lambda (bl)
-                                                     (slack-block-to-string bl (list :team team)))
-                                                 blocks
-                                                 "\n\n")
+                                      blocks-text
                                       "\n")
                                      "\n")))
-           (body (and text (mapconcat #'(lambda (e) (concat pad e))
-                                      (split-string text "\n")
-                                      "\n")))
+           (body (and text
+                      (unless (and blocks-text
+                                   (string= (slack-unescape
+                                             (substring-no-properties blocks-text)
+                                             team)
+                                            (slack-unescape text team)))
+                        (mapconcat #'(lambda (e) (concat pad e))
+                                   (split-string text "\n")
+                                   "\n"))))
            (fields (if fields (mapconcat #'(lambda (field)
                                              (slack-attachment-field-to-string field
                                                                                pad))

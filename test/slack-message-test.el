@@ -8,6 +8,25 @@
 (require 'ert)
 (require 'slack-message)
 (require 'slack-room)
+(require 'slack-attachment)
+
+(ert-deftest slack-message-test-duplicate-attachment-text-is-rendered-once ()
+  "Matching attachment text is not rendered again beside its blocks."
+  (slack-test-setup
+    (let ((attachment (make-instance 'slack-attachment
+                                     :blocks '(block)
+                                     :text "same"
+                                     :mrkdwn_in '("text"))))
+      (cl-letf (((symbol-function 'slack-block-to-string)
+                 (lambda (&rest _args) "same")))
+        (let ((rendered (substring-no-properties
+                         (slack-message-to-string attachment team)))
+              (start 0)
+              (count 0))
+          (while (string-match "same" rendered start)
+            (setq count (1+ count)
+                  start (match-end 0)))
+          (should (= 1 count)))))))
 
 (ert-deftest slack-message-test-get-or-fetch-async-history-hit ()
   "A message visible in channel history is delivered from the history
