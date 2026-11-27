@@ -777,6 +777,7 @@ knows the two are not neighbours, which happens at the top of a block of
 history sitting under a gap marker."
   (let* ((lui-time-stamp-format "[%Y-%m-%d %H:%M] ")
          (lui-time-stamp-time (slack-message-time-stamp message))
+         (team (slack-buffer-team this))
          (ts (slack-ts message))
          (prev (unless no-merge-p
                  (or prev-message (slack-buffer-prev-message this message))))
@@ -802,8 +803,10 @@ history sitting under a gap marker."
      'ts ts
      'slack-last-ts lui-time-stamp-last
      'cursor-sensor-functions '(slack-buffer-subscribe-cursor-event))
-    (lui-insert "" t)
-    (slack-message-fold--maybe-auto-fold beg (marker-position lui-output-marker))))
+     (lui-insert "" t)
+     (slack-message-fold--maybe-auto-fold beg (marker-position lui-output-marker))
+     (when (and team (slack-team-animate-image-p team))
+       (slack-buffer-animate-images (slack-buffer-buffer this)))))
 
 (cl-defmethod slack-buffer-replace ((this slack-message-buffer) message)
   (with-current-buffer (slack-buffer-buffer this)
@@ -864,7 +867,10 @@ history sitting under a gap marker."
                   (unless (eq merged-message-p merge-message-p)
                     (slack-buffer-replace this next)))))))))
 
-  (slack-buffer-update-marker-overlay this))
+  (slack-buffer-update-marker-overlay this)
+  (let ((team (slack-buffer-team this)))
+    (when (and team (slack-team-animate-image-p team))
+      (slack-buffer-animate-images (slack-buffer-buffer this)))))
 
 (defun slack-message-buffer-detect-ts-changed ()
   (slack-if-let* ((buffer slack-current-buffer)

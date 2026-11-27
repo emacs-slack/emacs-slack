@@ -129,4 +129,56 @@ instead of an Emacs buffer."
                            :width 36 :height 36 :ascent 80)
                      (slack-image--round-profile "/tmp/avatar.png" 36))))))
 
+(ert-deftest slack-test-animated-images-survive-rendering-preparation ()
+  "Multi-frame images are not flattened by resizing or rounding."
+  (let ((image (list 'image :file "/tmp/animated.gif")))
+    (cl-letf (((symbol-function 'image-type-available-p)
+               (lambda (_type) t))
+              ((symbol-function 'image-multi-frame-p)
+               (lambda (_image) '(2 . 0.1)))
+              ((symbol-function 'file-exists-p)
+               (lambda (_file) t)))
+      (should (eq image (slack-image-shrink image 300)))
+      (should (eq image (slack-image--round-content "/tmp/animated.gif"
+                                                     image))))))
+
+(ert-deftest slack-test-rendered-image-keeps-source-url ()
+  "A rendered image retains its source URL for image actions."
+  (let ((url "https://files.slack.com/files-pri/T0/fake.gif")
+        (slack-render-image-p t))
+    (cl-letf (((symbol-function 'slack-image-path)
+               (lambda (_url) "/tmp/fake.gif"))
+              ((symbol-function 'file-exists-p)
+               (lambda (_file) t))
+              ((symbol-function 'slack-image--create)
+               (lambda (&rest _args) (list 'image)))
+              ((symbol-function 'slack-image-slice)
+               (lambda (image) (list image)))
+              ((symbol-function 'slack-mapconcat-images)
+               (lambda (&rest _args) "image")))
+      (let ((rendered (slack-image-string (list url))))
+        (should (equal url (get-text-property 0 'slack-file-url rendered)))))))
+
+(ert-deftest slack-test-buffer-starts-animated-images ()
+  "Rendered multi-frame images get an animation timer in any Slack buffer."
+  (let ((buffer (generate-new-buffer " *slack-image-animation-test*"))
+        (image (list 'image :file "/tmp/animated.gif"))
+        animated)
+    (unwind-protect
+        (with-current-buffer buffer
+          (insert (propertize "image"
+                              'slack-image-display
+                              (list (list 'slice 0 0 1 1) image)))
+          (cl-letf (((symbol-function 'display-graphic-p)
+                     (lambda () t))
+                    ((symbol-function 'image-multi-frame-p)
+                     (lambda (_image) '(2 . 0.1)))
+                    ((symbol-function 'image-animate-timer)
+                     (lambda (_image) nil))
+                    ((symbol-function 'image-animate)
+                     (lambda (&rest _args) (setq animated t))))
+            (slack-buffer-animate-images buffer)
+            (should animated)))
+      (kill-buffer buffer))))
+
 ;;; slack-image-test.el ends here

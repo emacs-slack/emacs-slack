@@ -84,7 +84,8 @@ behavior for that invocation."
 (defun slack-image-shrink (image &optional max-height)
   (unless (image-type-available-p 'imagemagick)
     (error "Need Imagemagick"))
-  (if max-height
+  (if (and max-height
+           (not (image-multi-frame-p image)))
       (let* ((data (plist-get (cdr image) :data))
              (file (plist-get (cdr image) :file))
              (size (image-size image t))
@@ -141,7 +142,9 @@ behavior for that invocation."
                                                   (list :max-height max-height))
                                               (if max-width
                                                   (list :max-width max-width))))))
-    (let ((final (if (and (display-graphic-p) imagemagick-available-p)
+    (let ((final (if (and (display-graphic-p)
+                          imagemagick-available-p
+                          (not (image-multi-frame-p image)))
                      (slack-image-shrink image max-height)
                    image)))
       (slack-image--round-content path final))))
@@ -154,14 +157,20 @@ behavior for that invocation."
   (if (and slack-render-image-p spec)
       (slack-if-let* ((path (slack-image-path (car spec))))
           (if (file-exists-p path)
-              (slack-mapconcat-images
-               (slack-image-slice
-                (slack-image--create path
-                                     :width (cadr spec)
-                                     :height (caddr spec)
-                                     :max-height (cadddr spec)
-                                     :max-width (cadr (cdddr spec))))
-               pad)
+              (let ((result
+                     (slack-mapconcat-images
+                      (slack-image-slice
+                       (slack-image--create path
+                                            :width (cadr spec)
+                                            :height (caddr spec)
+                                            :max-height (cadddr spec)
+                                            :max-width (cadr (cdddr spec))))
+                      pad)))
+                (when (and result (car spec))
+                  (add-text-properties 0 (length result)
+                                       (list 'slack-file-url (car spec))
+                                       result))
+                result)
             (propertize "[Image]"
                         'slack-image-spec spec
                         'no-token no-token))
@@ -262,8 +271,10 @@ Emacs buffer (ARG reverses the value of
 
 (defun slack-image--round-content (file image)
   "Wrap IMAGE (created from FILE) in an SVG with small rounded corners.
-Returns IMAGE unchanged if SVG is not available."
-  (if (and (image-type-available-p 'svg) (file-exists-p file))
+  Returns IMAGE unchanged if SVG is not available."
+  (if (and (image-type-available-p 'svg)
+           (file-exists-p file)
+           (not (image-multi-frame-p image)))
       (let* ((size (image-size image t))
              (w (car size))
              (h (cdr size)))

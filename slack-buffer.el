@@ -265,7 +265,8 @@ placeholder so the buffer does not wait forever."
      'cursor-sensor-functions '(slack-buffer-subscribe-cursor-event))
     (lui-insert "" t)
     (slack-message-fold--maybe-auto-fold beg (marker-position lui-output-marker))
-    ))
+    (when (and team (slack-team-animate-image-p team))
+      (slack-buffer-animate-images (slack-buffer-buffer this)))))
 
 (defun slack-load-more-message ()
   (interactive)
@@ -412,13 +413,30 @@ placeholder so the buffer does not wait forever."
                                    :token token
                                    :cookie cookie)))))))
 
+(defun slack-buffer-animate-images (buffer)
+  "Start animation for multi-frame images already rendered in BUFFER."
+  (when (and (display-graphic-p) (buffer-live-p buffer))
+    (with-current-buffer buffer
+      (let ((pos (point-min)))
+        (while (< pos (point-max))
+          (let* ((display (get-text-property pos 'slack-image-display))
+                 (image (and display (slack-image--extract-image display))))
+            (when (and image
+                       (image-multi-frame-p image)
+                       (not (timerp (image-animate-timer image))))
+              (image-animate image nil t)))
+          (setq pos (next-single-property-change
+                     pos 'slack-image-display nil (point-max))))))))
+
 (cl-defmethod slack-buffer-replace ((this slack-buffer) message)
   (let ((team (slack-buffer-team this)))
     (with-current-buffer (slack-buffer-buffer this)
       (lui-replace (slack-message-to-string message team)
                    (lambda ()
                      (equal (get-text-property (point) 'ts)
-                            (slack-ts message)))))))
+                            (slack-ts message))))
+    (when (and team (slack-team-animate-image-p team))
+      (slack-buffer-animate-images (slack-buffer-buffer this))))))
 
 (cl-defmethod slack-buffer--subscribe-cursor-event ((_this slack-buffer)
                                                     _window

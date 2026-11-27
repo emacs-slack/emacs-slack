@@ -157,6 +157,31 @@ container, and the action goes to Slack's agent service."
                                                "ai_agent_action:test-actions")
                      "test_missing"))))))
 
+(ert-deftest slack-room-buffer-test-uncached-giphy-button-runs-action ()
+  "A Giphy preview action works even when its ephemeral message is uncached."
+  (slack-test-with-registered-team (team channel)
+    (let* ((ts (slack-test-ts 1))
+           (action (list (cons "type" "button")
+                         (cons "block_id" "giphy:ephemeral_preview")
+                         (cons "action_id" "post")))
+           executed)
+      (with-temp-buffer
+        (insert (propertize "Send" 'ts ts 'slack-action-payload action))
+        (goto-char (point-min))
+        (cl-letf (((symbol-function 'slack-block-action-execute)
+                   (lambda (service-id actions container _team)
+                     (setq executed (list service-id actions container))))
+                  ((symbol-function 'slack-room-find-message)
+                   (lambda (&rest _) nil)))
+          (slack-buffer-execute-button-block-action
+           (make-instance 'slack-message-buffer
+                          :team-id (oref team id)
+                          :room-id (oref channel id))))
+        (should (equal "B01" (car executed)))
+        (should (equal action (car (cadr executed))))
+        (should (equal ts (cdr (assoc "message_ts" (caddr executed)))))
+        (should (equal t (cdr (assoc "is_ephemeral" (caddr executed)))))))))
+
 (ert-deftest slack-room-buffer-test-block-action-service-id ()
   "AI agent card actions go to Slack's agent service, others keep
 the message-level service id."

@@ -319,9 +319,7 @@
 
 (cl-defmethod slack-message-body ((m slack-message) team)
   (if-let* ((blocks (and (not (oref team disable-block-format))
-                         (or (oref m blocks)
-                             (when-let* ((first-attachment (car (oref m attachments))))
-                               (oref first-attachment blocks))))))
+                         (oref m blocks))))
       (slack-unescape (mapconcat #'(lambda (bl)
                                      (slack-block-to-string bl (list :team team)))
                                  blocks
