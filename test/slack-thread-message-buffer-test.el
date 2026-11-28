@@ -7,7 +7,6 @@
 (require 'slack-thread-message-buffer)
 (require 'slack-user-message)
 (require 'slack-message)
-(require 'slack-slash-commands)
 
 (defun slack-thread-test--message (n user)
   "A reply from USER with the timestamp of message number N."
@@ -16,34 +15,6 @@
                  :ts (slack-test-ts n)
                  :channel "C11111"
                  :text "hi"))
-
-(ert-deftest slack-thread-test-giphy-command-keeps-thread-context ()
-  "The built-in Giphy command from a thread includes its thread timestamp."
-  (let* ((command (make-instance 'slack-service-command
-                                 :name "/giphy"
-                                 :type "service"))
-         (team (make-instance 'slack-team))
-         (room (make-instance 'slack-channel :id "C11111"))
-         (buffer (make-instance 'slack-thread-message-buffer
-                                :team-id "T11111"
-                                :room-id "C11111"
-                                :thread-ts "1700000000.000001"
-                                :has-more nil))
-         run-args)
-    (cl-letf (((symbol-function 'slack-buffer-team) (lambda (_buffer) team))
-              ((symbol-function 'slack-buffer-room) (lambda (_buffer) room))
-              ((symbol-function 'slack-slash-commands-parse)
-               (lambda (_message _team) (cons command "cats")))
-              ((symbol-function 'slack-command-run)
-               (lambda (&rest args) (setq run-args args))))
-      (let ((slack-current-buffer buffer))
-        (slack-thread-message--send "/giphy cats")))
-    (should (eq command (nth 0 run-args)))
-    (should (eq team (nth 1 run-args)))
-    (should (equal "C11111" (nth 2 run-args)))
-    (should (equal "cats" (plist-get (nthcdr 3 run-args) :text)))
-    (should (equal "1700000000.000001"
-                   (plist-get (nthcdr 3 run-args) :thread-ts)))))
 
 (ert-deftest slack-thread-test-alternating-p ()
   "`slack-thread--alternating-p' recognises two or three people taking

@@ -28,7 +28,6 @@
 (require 'dash)
 (require 'slack-util)
 (require 'slack-message-sender)
-(require 'slack-slash-commands)
 (require 'slack-message-reaction)
 (require 'slack-message-edit-buffer)
 (require 'slack-message-share-buffer)
@@ -39,7 +38,7 @@
   "Slack Thread Message"
   (lui-set-prompt lui-prompt-string)
   (cursor-sensor-mode)
-  (setq lui-input-function 'slack-thread-message--send))
+  (setq lui-input-function 'slack-message--send))
 
 ;; Typing "@" or "#" at the start of a word opens the mention picker;
 ;; see `slack-message-embed-on-typing'.
@@ -286,20 +285,8 @@ messages arriving in an already long thread do not repeat it."
                                    :payload payload
                                    :files files))))
 
-(defun slack-thread-message--send (message)
-  (slack-if-let* ((buf slack-current-buffer))
-      (let* ((team (slack-buffer-team buf))
-             (room (slack-buffer-room buf))
-             (command-and-arg (and (string-prefix-p "/" message)
-                                   (slack-slash-commands-parse message team))))
-        (if (and command-and-arg
-                 (string= "/giphy" (oref (car command-and-arg) name)))
-            (slack-command-run (car command-and-arg)
-                               team
-                               (oref room id)
-                               :text (cdr command-and-arg)
-                               :thread-ts (oref buf thread-ts))
-          (slack-buffer-send-message buf message)))))
+(cl-defmethod slack-buffer-thread-ts ((this slack-thread-message-buffer))
+  (oref this thread-ts))
 
 (cl-defmethod slack-buffer-add-reaction-to-message ((this slack-thread-message-buffer) reaction ts)
   (slack-message-reaction-add reaction

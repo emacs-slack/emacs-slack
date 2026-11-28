@@ -161,6 +161,15 @@ All notable changes to this project will be documented in this file.
   completing mentions with ~company-slack-backend~ keep typing them
   literally.  The new ~slack-message-embed-on-typing~ turns the picker
   off for typed =@= and =#= altogether.
+- Slash commands work in thread buffers the same way they do in
+  channel buffers.  Only =/giphy= was special-cased in threads and
+  every other command was posted as literal message text; the shared
+  input function now runs any registered command, asking the buffer
+  for its thread context through the new ~slack-buffer-thread-ts~
+  method so responses land in the thread.  An unknown command errors
+  ("Unknown slash command") instead of being sent as a reply.  This
+  also removes the require cycle between =slack-slash-commands.el=
+  and =slack-thread-message-buffer.el= that broke byte-compilation.
 
 - Starring or unstarring a message now logs the outcome at info level
   (~Successfully starred message.~ / ~Successfully unstarred message.~)

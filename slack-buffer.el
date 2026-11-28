@@ -337,6 +337,15 @@ placeholder so the buffer does not wait forever."
   (slack-buffer-cant-execute this))
 (cl-defmethod slack-buffer-send-message ((this slack-buffer) _message)
   (slack-buffer-cant-execute this))
+
+(cl-defgeneric slack-buffer-thread-ts (_this)
+  "Thread timestamp the messages in THIS buffer belong to, or nil.
+Commands run from a buffer pass this on so their responses land in
+the same thread instead of the room.")
+
+(cl-defmethod slack-buffer-thread-ts ((_this slack-buffer))
+  "Only thread buffers carry a thread timestamp."
+  nil)
 (cl-defmethod slack-buffer-room ((this slack-buffer))
   (slack-buffer-cant-execute this))
 (cl-defmethod slack-buffer-execute-button-block-action ((this slack-buffer))

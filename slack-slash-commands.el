@@ -175,7 +175,8 @@
               (slack-command-run (car command-and-arg)
                                  team
                                  (oref room id)
-                                 :text (cdr command-and-arg))
+                                 :text (cdr command-and-arg)
+                                 :thread-ts (slack-buffer-thread-ts buf))
             (error "Unknown slash command: %s"
                    (car (split-string message))))
         (slack-buffer-send-message buf message))))
