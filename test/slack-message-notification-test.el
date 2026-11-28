@@ -138,6 +138,28 @@
                 ((symbol-function 'slack-message-notify)
                  (lambda (&rest _args)
                    (setq notified t))))
+       (slack-message-event-notify-reply event team))
+      (should-not notified))))
+
+(ert-deftest slack-test-message-replied-root-payload-does-not-notify ()
+  "A root-shaped message_replied payload does not notify the thread root."
+  (slack-test-setup
+    (let* ((thread-ts "1700000000.000001")
+           (event (slack-create-message-event
+                   (list :type "message"
+                         :subtype "message_replied"
+                         :channel (oref channel id)
+                         :message (list :type "message"
+                                        :ts thread-ts
+                                        :thread_ts thread-ts
+                                        :user "U11111"
+                                        :text "The thread root"))))
+           (notified nil))
+      (cl-letf (((symbol-function 'slack-room-find)
+                 (lambda (_channel _team) channel))
+                ((symbol-function 'slack-message-notify)
+                 (lambda (&rest _args)
+                   (setq notified t))))
         (slack-message-event-notify-reply event team))
       (should-not notified))))
 
