@@ -7,6 +7,16 @@ All notable changes to this project will be documented in this file.
 
 ** Fixed
 
+- Inviting several users to a channel could not be finished under the
+  default ~completing-read~.  ~slack-conversations-invite~ selected
+  users in a loop and only stopped on a nil selection, which the
+  default completion UI cannot produce (an unmatched or empty input is
+  rejected and =C-g= aborts the whole command), so the escape only
+  worked under completion UIs such as ivy or helm whose =C-g= returns
+  nil.  The loop now uses ~slack-select-multiple~, the same
+  repeated-selection mechanism as group DMs, usergroup updates and
+  file sharing: pick users one after another and press =RET= on the
+  empty prompt to send the invite with everyone selected so far.
 - Redrawing a visible message buffer no longer moves point to the
   beginning of the buffer.  ~slack-buffer-redraw~ deletes the drawn
   history and renders it again, which dragged point to =point-min=;

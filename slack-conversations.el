@@ -147,25 +147,19 @@
                                                               (slack-room-members room)
                                                               :test #'string=)))
                                              users))))
-         (users nil))
-    (cl-labels
-        ((already-selected-p
-          (user-name)
-          (cl-find-if #'(lambda (e)
-                          (string= e
-                                   (plist-get (cdr user-name)
-                                              :id)))
-                      users))
-         (filter-selected (user-names)
-                          (cl-remove-if #'already-selected-p
-                                        user-names)))
-      (cl-loop for i from 1 upto 30
-               as candidates = (filter-selected user-names)
-               as selected = (slack-select-from-list
-                                 (candidates "Select User: "))
-               while selected
-               do (push (plist-get selected :id) users)))
-    (setq users (mapconcat #'identity users ","))
+         ;; `slack-select-multiple' ends the selection with an empty
+         ;; RET and removes already picked users from the candidates
+         ;; itself, the same mechanism group DMs, usergroup updates and
+         ;; file sharing use.
+         (users (slack-select-multiple
+                 #'(lambda (loop-count)
+                     (if (< 0 loop-count)
+                         "Select another user (or leave empty): "
+                       "Select user: "))
+                 user-names)))
+    (setq users (mapconcat (lambda (user) (plist-get user :id))
+                           users
+                           ","))
     (cl-labels
         ((errors-handler
           (errors)
